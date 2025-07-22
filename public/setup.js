@@ -1,6 +1,108 @@
 // setup.js — логика этапа подготовки (setup)
 
 let currentDraggedData = null;
+let dragGhost = null;
+
+// pointer‑down: начинаем «таскать»
+function onPointerDown(e) {
+  const shipEl = e.currentTarget;
+  e.preventDefault();
+  shipEl.setPointerCapture(e.pointerId);
+
+  // читаем параметры корабля
+  const length = +shipEl.dataset.length;
+  const orientation = shipEl.dataset.orientation;
+  const id = `ship_${shipCounter++}`;
+  shipEl.dataset.id = id;
+  currentDraggedData = { length, id, orientation };
+
+  // создаём ghost‑призрак
+  dragGhost = shipEl.cloneNode(true);
+  dragGhost.classList.add('dragging');
+  dragGhost.style.position = 'fixed';
+  dragGhost.style.opacity = '0.2';
+  dragGhost.style.pointerEvents = 'none';
+  document.body.appendChild(dragGhost);
+
+  // сразу позиционируем
+  moveGhost(e.clientX, e.clientY);
+
+  // слушаем движение и отпускание
+  shipEl.addEventListener('pointermove', onPointerMove);
+  shipEl.addEventListener('pointerup',   onPointerUp);
+  shipEl.addEventListener('pointercancel', onPointerUp);
+}
+
+// pointer‑move: двигаем ghost и рисуем превью
+function onPointerMove(e) {
+  e.preventDefault();
+  moveGhost(e.clientX, e.clientY);
+
+  // превью-логика: почти как в dragover,
+  // но с cell под пальцем:
+  clearPreview();
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const cell = under && under.classList.contains('cell') && under;
+  if (!cell || !currentDraggedData) return;
+
+  // стартовая точка на одну клетку выше
+  const x0 = +cell.dataset.x;
+  const y0 = +cell.dataset.y - 2;
+  if (y0 < 0) return;
+
+  const { length, orientation } = currentDraggedData;
+  const previewCells = [];
+  let fits = true;
+  for (let i = 0; i < length; i++) {
+    const tx = orientation === 'horizontal' ? x0 + i : x0;
+    const ty = orientation === 'vertical'   ? y0 - i : y0;
+    const c = document.querySelector(`.cell[data-x="${tx}"][data-y="${ty}"]`);
+    if (!c || !cellIsFreeWithBuffer(c)) fits = false;
+    previewCells.push(c);
+  }
+  previewCells.forEach(c => c && c.classList.add(fits ? 'preview-ok' : 'preview-bad'));
+}
+
+// pointer‑up/cancel: ставим корабль и убираем всё
+function onPointerUp(e) {
+  const shipEl = e.currentTarget;
+  shipEl.releasePointerCapture(e.pointerId);
+
+  // установка
+  const under = document.elementFromPoint(e.clientX, e.clientY);
+  const cell = under && under.classList.contains('cell') && under;
+  if (cell && currentDraggedData) {
+    const x = +cell.dataset.x;
+    const y = +cell.dataset.y - 2;
+    if (y >= 0) {
+      placeShipOnGrid(
+        currentDraggedData.length,
+        x, y,
+        currentDraggedData.id,
+        currentDraggedData.orientation
+      );
+    }
+  }
+
+  // снятие слушателей
+  shipEl.removeEventListener('pointermove', onPointerMove);
+  shipEl.removeEventListener('pointerup',   onPointerUp);
+  shipEl.removeEventListener('pointercancel', onPointerUp);
+
+  // чистка
+  clearPreview();
+  if (dragGhost) document.body.removeChild(dragGhost);
+  dragGhost = null;
+  currentDraggedData = null;
+}
+
+// helper: позиционирование ghost рядом с пальцем
+function moveGhost(cx, cy) {
+  const offsetX = 15;
+  const offsetY = -75;
+  dragGhost.style.left = `${cx - offsetX}px`;
+  dragGhost.style.top  = `${cy + offsetY}px`;
+}
 
 // Строит сетку 10×10 в контейнере
 export function buildGrid(container) {
@@ -21,40 +123,10 @@ let shipCounter = 1;
 export function initFleetDraggables(fleetPanel) {
   const ships = fleetPanel.querySelectorAll('.ship');
   ships.forEach(ship => {
-    ship.draggable = true;
-
-    ship.addEventListener('dragstart', (e) => {
-      handleShipDragStart(e);
-      ship.classList.add('dragging');
-    });
-
-    ship.addEventListener('dragend', () => {
-      ship.classList.remove('dragging');
-    });
+    // вместо HTML5 drag — pointer‑based
+    ship.style.touchAction = 'none';    // важен для pointer’ов
+    ship.addEventListener('pointerdown', onPointerDown);
   });
-}
-
-function handleShipDragStart(e) {
-  const shipEl = e.target;
-  const length = parseInt(shipEl.dataset.length, 10);
-  if (!length) {
-    console.warn('Нет data-length у корабля:', shipEl);
-    return;
-  }
-
-  // Считываем ориентацию из классов
-  const orientation = shipEl.classList.contains('vertical')
-    ? 'vertical'
-    : 'horizontal';
-
-  const id = `ship_${shipCounter++}`;
-  shipEl.dataset.id = id;
-
-  currentDraggedData = { length, id, orientation };
-
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', '');
-  console.log('dragstart:', currentDraggedData);
 }
 
 // Обработка превью и drop на гриде
@@ -69,7 +141,8 @@ export function enableGridDrop(gridEl) {
 
     clearPreview();
     const x = +cell.dataset.x;
-    const y = +cell.dataset.y;
+    const y = +cell.dataset.y - 2;  // начало превью на одну клетку выше
+    if (y < 0) { clearPreview(); return; }
     const previewCells = [];
     let fits = true;
 
@@ -102,7 +175,8 @@ export function enableGridDrop(gridEl) {
     if (!cell) return;
 
     const x = +cell.dataset.x;
-    const y = +cell.dataset.y;
+    const y = +cell.dataset.y - 2;  // реальное размещение на одну клетку выше
+    if (y < 0) { clearPreview(); return; }
     placeShipOnGrid(length, x, y, id, orientation);
 
     currentDraggedData = null;
