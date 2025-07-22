@@ -25,7 +25,7 @@ function onPointerDown(e) {
   document.body.appendChild(dragGhost);
 
   // сразу позиционируем
-  moveGhost(e.clientX, e.clientY);
+  moveGhost(e.clientX, e.clientY, orientation, length );
 
   // слушаем движение и отпускание
   shipEl.addEventListener('pointermove', onPointerMove);
@@ -97,12 +97,26 @@ function onPointerUp(e) {
 }
 
 // helper: позиционирование ghost рядом с пальцем
-function moveGhost(cx, cy) {
-  const offsetX = 15;
-  const offsetY = -75;
-  dragGhost.style.left = `${cx - offsetX}px`;
-  dragGhost.style.top  = `${cy + offsetY}px`;
-}
+const createGhostMover = () => {
+  let orientation = null;
+  let length = null;
+
+  return function moveGhost(cx, cy, newOrientation, newLength) {
+    if (newOrientation) orientation = newOrientation;
+    if (newLength) length = newLength;
+
+    console.log('orientation =', orientation);
+    console.log('length =', length);
+
+    const offsetX = 15;
+    const offsetY = orientation === 'vertical' ? (length * -30 - 50) : -75;
+
+    dragGhost.style.left = `${cx - offsetX}px`;
+    dragGhost.style.top  = `${cy + offsetY}px`;
+  };
+};
+
+const moveGhost = createGhostMover();
 
 // Строит сетку 10×10 в контейнере
 export function buildGrid(container) {
