@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Морской бой</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <!-- Панель подключения -->
+  <div id="connectionPanel">
+    <input id="secretInput" placeholder="Введите id" />
+    <button id="connectBtn">Подключение</button>
+  </div>
+
+
+  <!-- Игровая зона -->
+  <div id="gameContainer" class="hidden">
+    <h2>Разместите свои корабли</h2>
+
+    <div class="container-middle">
+      <!-- Поле игрока -->
+      <div id="playerGrid" class="grid"></div>
+
+      <!-- Панель кораблей -->
+      <div id="fleetPanel">
+        <div class="ship" data-length="4" data-orientation="horizontal"></div>
+        <div class="ship" data-length="3" data-orientation="horizontal"></div>
+        <div class="ship" data-length="3" data-orientation="horizontal"></div>
+        <div class="ship" data-length="2" data-orientation="horizontal"></div>
+        <div class="ship" data-length="2" data-orientation="horizontal"></div>
+        <div class="ship" data-length="2" data-orientation="horizontal"></div>
+        <div class="ship" data-length="1" data-orientation="horizontal"></div>
+        <div class="ship" data-length="1" data-orientation="horizontal"></div>
+        <div class="ship" data-length="1" data-orientation="horizontal"></div>
+        <div class="ship" data-length="1" data-orientation="horizontal"></div>
+      </div>
+
+    </div>
+
+    <!-- Кнопки управления -->
+    <div id="controls">
+      <button id="rotateBtn">Повернуть</button>
+      <button id="readyBtn">Готов</button>
+      <button id="resetBtn">Сброс</button>
+    </div>
+  </div>
+
+  <!-- Модальное окно ожидания -->
+  <div id="modal" class="hidden">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal-content">
+      <div class="loader"></div>
+      <p>Ожидание соперника...</p>
+      <button id="cancelBtn">Отмена</button>
+    </div>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+
+</html>

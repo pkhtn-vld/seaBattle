@@ -1,0 +1,10 @@
+export function createNewGame() {
+  return {
+    players: {
+      player1: { ships: [], hits: [], misses: [] },
+      player2: { ships: [], hits: [], misses: [] }
+    },
+    turn: "player1",
+    status: "setup"
+  };
+}

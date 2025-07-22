@@ -1,0 +1,224 @@
+/* Общие стили */
+html body {
+  font-family: Arial, sans-serif;
+  background-color: #f0f4f7;
+  text-align: center;
+  padding: 20px;
+  height: calc(var(--vh, 1vh) * 100);
+  margin: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Сетка игрока */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(10, 30px);
+  grid-template-rows: repeat(10, 30px);
+  gap: 2px;
+  margin-bottom: 10px;
+  place-items: center;
+}
+
+.cell {
+  width: 30px;
+  height: 30px;
+  background-color: #d0e4f5;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+.cell:hover {
+  opacity: .7;
+  cursor: pointer;
+}
+
+/* Корабли */
+#fleetPanel {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: column;
+  justify-content: center;
+  margin: 5px;
+  gap: 3px;
+  min-width: 330px;
+  max-width: 330px;
+}
+
+.ship {
+  background-color: #555;
+  border: 2px solid #222;
+  border-radius: 4px;
+  touch-action: none;
+  cursor: grab;
+}
+
+.ship.selected {
+  outline: 3px solid #00aaff;
+}
+
+.ship[data-length="1"] {
+  width: 30px;
+  height: 30px;
+}
+
+.ship[data-length="2"] {
+  width: 60px;
+  height: 30px;
+}
+
+.ship[data-length="3"] {
+  width: 90px;
+  height: 30px;
+}
+
+.ship[data-length="4"] {
+  width: 120px;
+  height: 30px;
+}
+
+/* Размещение корабля на поле */
+.occupied {
+  background-color: #99c;
+}
+
+/* Кнопки управления */
+#controls {
+  margin-top: 15px;
+}
+
+#rotateBtn,
+#readyBtn,
+#resetBtn {
+  padding: 10px 20px;
+  margin: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+}
+
+#rotateBtn {
+  background-color: #f0ad4e;
+  color: white;
+}
+
+#readyBtn {
+  background-color: #5cb85c;
+  color: white;
+}
+
+/* Адаптация модального окна */
+.modal-content {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  z-index: 999;
+}
+
+.loader {
+  border: 6px solid #eee;
+  border-top: 6px solid #00aaff;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  margin: 10px auto;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+#gameContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cell.preview-ok {
+  background-color: #a7f3a1 !important;
+}
+
+.cell.preview-bad {
+  background-color: #f3a1a1 !important;
+}
+
+.ship.dragging {
+  opacity: 0.1;
+  cursor: grabbing;
+}
+
+#resetBtn {
+  background-color: #d9534f;
+  color: white;
+}
+
+.container-middle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.container-middle {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+.container-middle>div {
+  flex: 1;
+  overflow: hidden;
+  min-width: 330px;
+  margin: 5px;
+  width: 330px;
+  margin: 5px;
+  max-width: 330px;
+  align-items: flex-end;
+  justify-content: center;
+  max-height: 320px;
+}
+
+/* тест */
+#connectionPanel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+#secretInput {
+  width: 100%;
+  padding: 16px 20px;
+  font-size: 18px;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+
+#connectBtn {
+  width: 100%;
+  padding: 16px 20px;
+  font-size: 18px;
+  background-color: #5cb85c;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#connectBtn:active {
+  transform: scale(0.95);
+}
