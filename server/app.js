@@ -71,29 +71,46 @@ wss.on('connection', (ws) => {
     switch (type) {
 
       case 'connect':
-        if (!session.sockets.player1) {
-          ws.role = 'player1';
-        } else if (!session.sockets.player2) {
-          ws.role = 'player2';
-        } else {
-          log(`Сессия ${secret_id} заполнена`, 'warn');
-          ws.send(JSON.stringify({ type: 'id_taken' }));
-          return;
-        }
+       // Назначаем роль
+      ws.role = session.sockets.player1 ? 'player2' : 'player1';
 
-        break;
+      // Подгружаем battleData из файла, если оба флота там есть
+      {
+        const file = path.join(GAMES_FOLDER, `${secret_id}.json`);
+        if (fs.existsSync(file)) {
+          const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
+          if (saved.player1 && saved.player2) {
+            session.battleData = saved;
+            log(`Подгружены флоты из файла для ${ws.role}`, 'info');
+          }
+        }
+      }
+      break;
 
       case 'reconnect':
-        if (!['player1', 'player2'].includes(clientRole)) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Некорректная роль' }));
-          return;
+        // Проверяем роль
+      if (!['player1', 'player2'].includes(clientRole)) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Некорректная роль' }));
+        return;
+      }
+      if (session.sockets[clientRole]) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Роль уже занята' }));
+        return;
+      }
+      ws.role = clientRole;
+
+      // Подгружаем battleData из файла
+      {
+        const file = path.join(GAMES_FOLDER, `${secret_id}.json`);
+        if (fs.existsSync(file)) {
+          const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
+          if (saved.player1 && saved.player2) {
+            session.battleData = saved;
+            log(`Подгружены флоты из файла для ${ws.role}`, 'info');
+          }
         }
-        if (session.sockets[clientRole]) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Роль уже занята' }));
-          return;
-        }
-        ws.role = clientRole;
-        break;
+      }
+      break;
 
       case 'battle_start':
         log(`battle_start от ${ws.role} в сессии ${secret_id}`, 'info');
