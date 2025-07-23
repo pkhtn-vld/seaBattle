@@ -1,6 +1,6 @@
 // main.js
 
-import { buildGrid, initFleetDraggables, enableGridDrop, rotateFleetShips, resetGame, randomizeFleetPlacement } from './setup.js';
+import { buildGrid, initFleetDraggables, enableGridDrop, rotateFleetShips, resetGame, randomizeFleetPlacement, populateFleetPanel, collectFleetData } from './setup.js';
 
 const connectBtn = document.getElementById('connectBtn');
 const cancelBtn = document.getElementById('cancelBtn');
@@ -99,6 +99,26 @@ function handleServerMessage(data) {
       teardown();
       break;
 
+    // case 'battle':
+    //   hideModal();
+    //   console.log("case 'battle'");
+
+    //   import('./battle.js').then(mod => {
+    //     mod.startBattle(role, data.fleet);
+    //   });
+    //   break;
+
+    case 'battle':
+      console.log('case battle →', data);
+      if (!data.battle_ready) {
+        showModal('Ожидаем второго игрока…');
+        return;
+      }
+      hideModal();
+      import('./battle.js').then(mod => mod.startBattle(role, data.fleet));
+      break;
+
+
     case 'error':
       alert(data.message || 'Неизвестная ошибка');
       teardown();
@@ -133,7 +153,8 @@ function showGame() {
 
   const grid = document.getElementById('playerGrid');
   const fleet = document.getElementById('fleetPanel');
-  buildGrid(grid);
+  populateFleetPanel();
+  buildGrid(grid, 12);
   initFleetDraggables(fleet);
   enableGridDrop(grid);
 }
@@ -199,6 +220,20 @@ randomBtn.onclick = () => {
 
 // Обработка кнопки "Готов"
 readyBtn.onclick = () => {
+
+  // проверяем что все корабли установлены
+  const fleetPanel = document.getElementById('fleetPanel');
+  if (fleetPanel.children.length > 0) {
+    alert('Пожалуйста, расставьте все корабли на поле');
+    return;
+  }
+
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    const fleet = collectFleetData(); // собираем корабли
+    socket.send(JSON.stringify({ type: 'battle_start', secret_id, role, fleet }));
+    console.log('→ Отправлено событие battle_start');
+    showModal('Ожидаем второго игрока…');
+  }
 };
 
 document.addEventListener('touchstart', function (e) {

@@ -68,31 +68,63 @@ wss.on('connection', (ws) => {
     }
     const session = sessions[secret_id];
 
-    // Первое подключение
-    if (type === 'connect') {
-      if (!session.sockets.player1) ws.role = 'player1';
-      else if (!session.sockets.player2) ws.role = 'player2';
-      else {
-        log(`Сессия ${secret_id} заполнена`, 'warn');
-        ws.send(JSON.stringify({ type: 'id_taken' }));
-        return;
-      }
+    switch (type) {
 
-      // Восстановление подключения
-    } else if (type === 'reconnect') {
-      if (!['player1', 'player2'].includes(clientRole)) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Некорректная роль' }));
-        return;
-      }
-      if (session.sockets[clientRole]) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Роль уже занята' }));
-        return;
-      }
-      ws.role = clientRole;
+      case 'connect':
+        if (!session.sockets.player1) {
+          ws.role = 'player1';
+        } else if (!session.sockets.player2) {
+          ws.role = 'player2';
+        } else {
+          log(`Сессия ${secret_id} заполнена`, 'warn');
+          ws.send(JSON.stringify({ type: 'id_taken' }));
+          return;
+        }
 
-    } else {
-      ws.send(JSON.stringify({ type: 'error', message: 'Неизвестный тип' }));
-      return;
+        break;
+
+      case 'reconnect':
+        if (!['player1', 'player2'].includes(clientRole)) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Некорректная роль' }));
+          return;
+        }
+        if (session.sockets[clientRole]) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Роль уже занята' }));
+          return;
+        }
+        ws.role = clientRole;
+        break;
+
+      case 'battle_start':
+        log(`battle_start от ${ws.role} в сессии ${secret_id}`, 'info');
+
+        // Инициализируем battleData, если её нет
+        session.battleData = session.battleData || {};
+        session.battleData[ws.role] = data.fleet; // сохраняем данные флота
+
+        // Сохраняем на диск
+        fs.writeFileSync(
+          path.join(GAMES_FOLDER, `${secret_id}.json`),
+          JSON.stringify(session.battleData, null, 2)
+        );
+        log(`Данные игрока ${ws.role} сохранены`, 'debug');
+
+        // Если оба игрока прислали данные — начинаем бой
+        if (session.battleData.player1 && session.battleData.player2) {
+          log(`Оба игрока готовы. Бой начинается: ${secret_id}`, 'info');
+          ['player1', 'player2'].forEach(roleKey => {
+            send(session.sockets[roleKey], {
+              type: 'battle',
+              fleet: session.battleData[roleKey],
+              battle_ready: true
+            });
+          });
+        }
+        return;
+
+      default:
+        ws.send(JSON.stringify({ type: 'error', message: 'Неизвестный тип' }));
+        return;
     }
 
     // Привязываем сокет к сессии
@@ -105,7 +137,7 @@ wss.on('connection', (ws) => {
 
     const p1 = session.sockets.player1;
     const p2 = session.sockets.player2;
-    const both = p1 && p2;
+    const both = Boolean(p1 && p2);
 
     if (type === 'connect') {
       if (both) {
@@ -125,6 +157,18 @@ wss.on('connection', (ws) => {
       } else {
         ws.send(JSON.stringify({ type: 'waiting' }));
       }
+    }
+
+    // === Универсальная проверка: если оба флота уже сохранены ===
+    if (session.battleData?.player1 && session.battleData?.player2 && both) {
+      log(`Рестарт боя для сессии ${secret_id}`, 'info');
+      ['player1', 'player2'].forEach(roleKey => {
+        session.sockets[roleKey].send(JSON.stringify({
+          type: 'battle',
+          fleet: session.battleData[roleKey],
+          battle_ready: true
+        }));
+      });
     }
   });
 

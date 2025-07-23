@@ -25,11 +25,11 @@ function onPointerDown(e) {
   document.body.appendChild(dragGhost);
 
   // сразу позиционируем
-  moveGhost(e.clientX, e.clientY, orientation, length );
+  moveGhost(e.clientX, e.clientY, orientation, length);
 
   // слушаем движение и отпускание
   shipEl.addEventListener('pointermove', onPointerMove);
-  shipEl.addEventListener('pointerup',   onPointerUp);
+  shipEl.addEventListener('pointerup', onPointerUp);
   shipEl.addEventListener('pointercancel', onPointerUp);
 }
 
@@ -55,7 +55,7 @@ function onPointerMove(e) {
   let fits = true;
   for (let i = 0; i < length; i++) {
     const tx = orientation === 'horizontal' ? x0 + i : x0;
-    const ty = orientation === 'vertical'   ? y0 - i : y0;
+    const ty = orientation === 'vertical' ? y0 - i : y0;
     const c = document.querySelector(`.cell[data-x="${tx}"][data-y="${ty}"]`);
     if (!c || !cellIsFreeWithBuffer(c)) fits = false;
     previewCells.push(c);
@@ -86,7 +86,7 @@ function onPointerUp(e) {
 
   // снятие слушателей
   shipEl.removeEventListener('pointermove', onPointerMove);
-  shipEl.removeEventListener('pointerup',   onPointerUp);
+  shipEl.removeEventListener('pointerup', onPointerUp);
   shipEl.removeEventListener('pointercancel', onPointerUp);
 
   // чистка
@@ -104,27 +104,29 @@ const createGhostMover = () => {
   return function moveGhost(cx, cy, newOrientation, newLength) {
     if (newOrientation) orientation = newOrientation;
     if (newLength) length = newLength;
-    
+
     const offsetX = 15;
     const offsetY = orientation === 'vertical' ? (length * -30 - 50) : -75;
 
     dragGhost.style.left = `${cx - offsetX}px`;
-    dragGhost.style.top  = `${cy + offsetY}px`;
+    dragGhost.style.top = `${cy + offsetY}px`;
   };
 };
 
 const moveGhost = createGhostMover();
 
 // Строит сетку 10×10 в контейнере
-export function buildGrid(container) {
-  container.innerHTML = '';
-  for (let y = 0; y < 12; y++) {
-    for (let x = 0; x < 10; x++) {
-      const cell = document.createElement('div');
-      cell.className = 'cell';
-      cell.dataset.x = x;
-      cell.dataset.y = y;
-      container.appendChild(cell);
+export function buildGrid(container, yCount) {
+  if (container) {
+    container.innerHTML = '';
+    for (let y = 0; y < yCount; y++) {
+      for (let x = 0; x < 10; x++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.x = x;
+        cell.dataset.y = y;
+        container.appendChild(cell);
+      }
     }
   }
 }
@@ -132,16 +134,37 @@ export function buildGrid(container) {
 // Инициализация перетаскивания кораблей
 let shipCounter = 1;
 export function initFleetDraggables(fleetPanel) {
+  if (!fleetPanel) return;
+
   const ships = fleetPanel.querySelectorAll('.ship');
-  ships.forEach(ship => {
-    // вместо HTML5 drag — pointer‑based
-    ship.style.touchAction = 'none';    // важен для pointer’ов
-    ship.addEventListener('pointerdown', onPointerDown);
-  });
+  if (ships) {
+    ships.forEach(ship => {
+      // вместо HTML5 drag — pointer‑based
+      ship.style.touchAction = 'none';    // важен для pointer’ов
+      ship.addEventListener('pointerdown', onPointerDown);
+    });
+  }
+}
+
+// Заполняем html кораблями
+export function populateFleetPanel() {
+  const fleetPanel = document.getElementById("fleetPanel");
+  if (fleetPanel) {
+    fleetPanel.innerHTML = '';
+    [4, 3, 3, 2, 2, 2, 1, 1, 1, 1].forEach(len => {
+      const ship = document.createElement("div");
+      ship.className = "ship";
+      ship.dataset.length = len;
+      ship.dataset.orientation = "horizontal";
+      fleetPanel.appendChild(ship);
+    });
+  }
 }
 
 // Обработка превью и drop на гриде
 export function enableGridDrop(gridEl) {
+  if (!gridEl) return;
+  
   gridEl.addEventListener('dragover', (e) => {
     e.preventDefault();
     if (!currentDraggedData) return;
@@ -160,7 +183,7 @@ export function enableGridDrop(gridEl) {
     for (let i = 0; i < length; i++) {
       // если horizontal — смещаем по X, если vertical — по Y
       const tx = orientation === 'horizontal' ? x + i : x;
-      const ty = orientation === 'vertical'   ? y - i : y; // снизу вверх
+      const ty = orientation === 'vertical' ? y - i : y; // снизу вверх
 
       const c = document.querySelector(
         `.cell[data-x="${tx}"][data-y="${ty}"]`
@@ -205,7 +228,7 @@ export function placeShipOnGrid(length, x, y, shipId, orientation) {
   const cells = [];
   for (let i = 0; i < length; i++) {
     const tx = orientation === 'horizontal' ? x + i : x;
-    const ty = orientation === 'vertical'   ? y - i : y; // снизу вверх
+    const ty = orientation === 'vertical' ? y - i : y; // снизу вверх
 
     const selector = `.cell[data-x="${tx}"][data-y="${ty}"]`;
     const cell = document.querySelector(selector);
@@ -293,14 +316,14 @@ export function rotateFleetShips() {
 
     if (isVertical) {
       ship.dataset.orientation = 'horizontal';
-      ship.style.width  = `${length * 30}px`; // длина по X
+      ship.style.width = `${length * 30}px`; // длина по X
       ship.style.height = `30px`; // толщина
-      
+
       ship.classList.remove('vertical');
       ship.classList.add('horizontal');
     } else {
       ship.dataset.orientation = 'vertical';
-      ship.style.width  = `30px`; // толщина
+      ship.style.width = `30px`; // толщина
       ship.style.height = `${length * 30}px`; // длина по Y
 
       ship.classList.remove('horizontal');
@@ -334,4 +357,21 @@ export function resetGame() {
   });
 
   initFleetDraggables(fleetPanel);
+}
+
+export function collectFleetData() {
+  const grid = document.getElementById('playerGrid');
+  const cells = grid.querySelectorAll('.cell[data-ship-id]');
+  const fleet = {};
+
+  cells.forEach(cell => {
+    const shipId = cell.dataset.shipId;
+    const x = parseInt(cell.dataset.x, 10);
+    const y = parseInt(cell.dataset.y, 10);
+
+    if (!fleet[shipId]) fleet[shipId] = [];
+    fleet[shipId].push({ x, y });
+  });
+
+  return fleet;
 }
