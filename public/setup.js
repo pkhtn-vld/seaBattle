@@ -104,10 +104,7 @@ const createGhostMover = () => {
   return function moveGhost(cx, cy, newOrientation, newLength) {
     if (newOrientation) orientation = newOrientation;
     if (newLength) length = newLength;
-
-    console.log('orientation =', orientation);
-    console.log('length =', length);
-
+    
     const offsetX = 15;
     const offsetY = orientation === 'vertical' ? (length * -30 - 50) : -75;
 
@@ -121,7 +118,7 @@ const moveGhost = createGhostMover();
 // Строит сетку 10×10 в контейнере
 export function buildGrid(container) {
   container.innerHTML = '';
-  for (let y = 0; y < 10; y++) {
+  for (let y = 0; y < 12; y++) {
     for (let x = 0; x < 10; x++) {
       const cell = document.createElement('div');
       cell.className = 'cell';
@@ -212,7 +209,7 @@ export function placeShipOnGrid(length, x, y, shipId, orientation) {
 
     const selector = `.cell[data-x="${tx}"][data-y="${ty}"]`;
     const cell = document.querySelector(selector);
-    if (!cell || !cellIsFreeWithBuffer(cell)) return;
+    if (!cell || !cellIsFreeWithBuffer(cell)) return false;
     cells.push(cell);
   }
 
@@ -224,6 +221,47 @@ export function placeShipOnGrid(length, x, y, shipId, orientation) {
   // Удаляем исходный элемент корабля из панели
   const shipEl = document.querySelector(`.ship[data-id="${shipId}"]`);
   if (shipEl) shipEl.remove();
+  return true;
+}
+
+// Случайное размещение оставшихся кораблей (с учётом буфера)
+export function randomizeFleetPlacement() {
+  const grid = document.getElementById('playerGrid');
+  const fleetPanel = document.getElementById('fleetPanel');
+  const ships = Array.from(fleetPanel.querySelectorAll('.ship'));
+  ships.forEach(shipEl => {
+    const length = +shipEl.dataset.length;
+    // Случайная ориентация
+    const orientation = Math.random() < 0.5 ? 'horizontal' : 'vertical';
+    shipEl.dataset.orientation = orientation;
+    // Обновляем стили
+    if (orientation === 'horizontal') {
+      shipEl.style.width = `${length * 30}px`;
+      shipEl.style.height = `26px`;
+      shipEl.classList.add('horizontal');
+      shipEl.classList.remove('vertical');
+    } else {
+      shipEl.style.width = `30px`;
+      shipEl.style.height = `${length * 30}px`;
+      shipEl.classList.add('vertical');
+      shipEl.classList.remove('horizontal');
+    }
+    // Пробуем разместить
+    let placed = false;
+    while (!placed) {
+      const x = Math.floor(Math.random() * 10);
+      // для вертикали y — нижняя клетка
+      const y = orientation === 'horizontal'
+        ? Math.floor(Math.random() * 10)
+        : Math.floor(Math.random() * 10) + (length - 1);
+      // генерим id, если ещё нет
+      const id = shipEl.dataset.id || `ship_${shipCounter++}`;
+      shipEl.dataset.id = id;
+      if (placeShipOnGrid(length, x, y, id, orientation)) {
+        placed = true;
+      }
+    }
+  });
 }
 
 function cellIsFreeWithBuffer(cell) {
@@ -290,7 +328,7 @@ export function resetGame() {
     ship.dataset.length = length;
     ship.dataset.orientation = 'horizontal';
     ship.style.width = `${length * 30}px`;
-    ship.style.height = '30px';
+    ship.style.height = '26px';
     fleetPanel.appendChild(ship);
   });
 

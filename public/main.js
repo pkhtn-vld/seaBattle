@@ -1,6 +1,6 @@
-console.log('main.js');
+// main.js
 
-import { buildGrid, initFleetDraggables, enableGridDrop, rotateFleetShips, resetGame } from './setup.js';
+import { buildGrid, initFleetDraggables, enableGridDrop, rotateFleetShips, resetGame, randomizeFleetPlacement } from './setup.js';
 
 const connectBtn = document.getElementById('connectBtn');
 const cancelBtn = document.getElementById('cancelBtn');
@@ -11,6 +11,7 @@ const connectionPanel = document.getElementById('connectionPanel');
 const gameContainer = document.getElementById('gameContainer');
 const rotateBtn = document.getElementById('rotateBtn');
 const readyBtn = document.getElementById('readyBtn');
+const randomBtn = document.getElementById('randomBtn');
 
 let socket = null;
 let secret_id = null;
@@ -42,8 +43,6 @@ function openSocket(isReconnect = false) {
   };
 }
 
-// main.js
-
 // Показываем модалку с просьбой перезагрузить страницу
 function showReloadModal() {
   modalText.textContent = 'Соединение потеряно. Пожалуйста, перезагрузите страницу.';
@@ -57,6 +56,9 @@ function showReloadModal() {
   modal.classList.remove('hidden');
   connectionPanel.classList.add('hidden');
   gameContainer.classList.add('hidden');
+
+  
+  document.body.classList.remove('setup-mode');
 }
 
 
@@ -112,6 +114,8 @@ function showModal(text) {
   modal.classList.remove('hidden');
   connectionPanel.classList.add('hidden');
   gameContainer.classList.add('hidden');
+
+  document.body.classList.remove('setup-mode');
 }
 
 function hideModal() {
@@ -120,6 +124,7 @@ function hideModal() {
 }
 
 function showGame() {
+  document.body.classList.add('setup-mode');
   hideModal();
   connectionPanel.classList.add('hidden');
   gameContainer.classList.remove('hidden');
@@ -129,7 +134,6 @@ function showGame() {
   buildGrid(grid);
   initFleetDraggables(fleet);
   enableGridDrop(grid);
-
 }
 
 // Очистка всего состояния
@@ -179,3 +183,34 @@ rotateBtn.onclick = () => {
 
 // Обработка кнопки "Сброс"
 document.getElementById('resetBtn').addEventListener('click', resetGame);
+
+// Обработка кнопки "Случайное расположение"
+randomBtn.onclick = () => {
+  const fleetPanel = document.getElementById('fleetPanel');
+  // если все корабли уже расставлены — сначала сброс
+  if (fleetPanel.querySelectorAll('.ship').length === 0) {
+    resetGame();
+  }
+  randomizeFleetPlacement();
+};
+
+document.addEventListener('touchstart', function (e) {
+  if (e.touches.length > 1) {
+    e.preventDefault(); // блокирует pinch-to-zoom
+  }
+}, { passive: false });
+
+let tapTimeout = null;
+
+document.addEventListener('touchstart', function (e) {
+  if (tapTimeout !== null) {
+    clearTimeout(tapTimeout);     // отменяем предыдущий таймер
+    tapTimeout = null;
+    e.preventDefault();           // отменяем второй тап
+  } else {
+    tapTimeout = setTimeout(() => {
+      tapTimeout = null;          // сбрасываем через 500 мс
+    }, 500);
+  }
+}, { passive: false });
+

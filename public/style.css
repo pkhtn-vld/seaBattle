@@ -4,13 +4,21 @@ html body {
   background-color: #f0f4f7;
   text-align: center;
   padding: 20px;
-  height: calc(var(--vh, 1vh) * 100);
+  height: calc(var(--vh, 1vh) * 80);
   margin: 0;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  user-select: none;
+
+   -webkit-user-select: none; /* Safari / iOS */
+  user-select: none;         /* Стандарт */
+  -webkit-touch-callout: none; /* убирает всплывающее меню при долгом нажатии */
+}
+
+h2 {
+  margin-top: 0;
+  margin-bottom: 10px;
 }
 
 .hidden {
@@ -44,12 +52,13 @@ html body {
 #fleetPanel {
   display: flex;
   flex-wrap: wrap;
-  flex-direction: column;
-  justify-content: center;
-  margin: 5px;
-  gap: 3px;
+  justify-content: flex-start;
+  align-items: flex-start;
+  margin: 0 5px 0 5px;
+  gap: 8px;
   min-width: 330px;
   max-width: 330px;
+  min-height: 166px;
 }
 
 .ship {
@@ -66,22 +75,22 @@ html body {
 
 .ship[data-length="1"] {
   width: 30px;
-  height: 30px;
+  height: 26px;
 }
 
 .ship[data-length="2"] {
   width: 60px;
-  height: 30px;
+  height: 26px;
 }
 
 .ship[data-length="3"] {
   width: 90px;
-  height: 30px;
+  height: 26px;
 }
 
 .ship[data-length="4"] {
   width: 120px;
-  height: 30px;
+  height: 26px;
 }
 
 /* Размещение корабля на поле */
@@ -91,12 +100,14 @@ html body {
 
 /* Кнопки управления */
 #controls {
-  margin-top: 15px;
+  margin-top: 5px;
+  display: flex;
 }
 
 #rotateBtn,
 #readyBtn,
-#resetBtn {
+#resetBtn,
+#randomBtn {
   padding: 10px 20px;
   margin: 5px;
   font-weight: bold;
@@ -165,8 +176,9 @@ html body {
 
 .container-middle {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
+  flex-direction: column;
 }
 
 .container-middle {
@@ -178,14 +190,14 @@ html body {
 .container-middle>div {
   flex: 1;
   overflow: hidden;
-  min-width: 330px;
+  width: 320px;
+  max-width: 320px;
+  min-width: 320px;
   margin: 5px;
-  width: 330px;
   margin: 5px;
-  max-width: 330px;
   align-items: flex-end;
   justify-content: center;
-  max-height: 320px;
+  max-height: 382px;
 }
 
 /* тест */
@@ -221,4 +233,23 @@ html body {
 
 #connectBtn:active {
   transform: scale(0.95);
+}
+
+.cell[data-y="10"], .cell[data-y="11"] {
+  opacity: 0;
+  cursor: default;
+}
+
+#randomBtn {
+  font-size: 26px;
+  padding: 0;
+  background-color: transparent;
+  height: 35px;
+
+}
+
+@media screen and (max-width: 767px) and (orientation: portrait) {
+  .setup-mode {
+    align-items: start;
+  }
 }
