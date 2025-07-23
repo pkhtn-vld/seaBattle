@@ -1,8 +1,11 @@
+// app.js
+
 // Зависимости
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import fs from 'fs';
 import path from 'path';
+import { send } from './utils.js';
 
 // Настройки
 const PORT = 3012;
@@ -75,7 +78,7 @@ wss.on('connection', (ws) => {
         return;
       }
 
-    // Восстановление подключения
+      // Восстановление подключения
     } else if (type === 'reconnect') {
       if (!['player1', 'player2'].includes(clientRole)) {
         ws.send(JSON.stringify({ type: 'error', message: 'Некорректная роль' }));
@@ -137,9 +140,8 @@ wss.on('connection', (ws) => {
 
     const otherRole = role === 'player1' ? 'player2' : 'player1';
     const other = session.sockets[otherRole];
-    if (other) {
-      other.send(JSON.stringify({ type: 'pause' }));
-      log(`Отправлен pause игроку ${otherRole}`, 'debug');
-    }
+
+    // Уведомляем только соперника
+    send(other, { type: 'pause' });
   });
 });

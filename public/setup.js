@@ -264,6 +264,7 @@ export function randomizeFleetPlacement() {
   });
 }
 
+// Правило буфера между кораблями в одну клетку
 function cellIsFreeWithBuffer(cell) {
   if (!cell || cell.classList.contains('occupied')) return false;
   const x = +cell.dataset.x;
@@ -308,7 +309,7 @@ export function rotateFleetShips() {
   });
 }
 
-// обработчка кнопки сброса
+// Обработчка кнопки сброса
 export function resetGame() {
   // 1. Очищаем все ячейки
   document.querySelectorAll('.cell').forEach(cell => {

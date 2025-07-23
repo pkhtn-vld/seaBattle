@@ -16,6 +16,7 @@ const randomBtn = document.getElementById('randomBtn');
 let socket = null;
 let secret_id = null;
 let role = null;
+let selfDisconnect = false;
 
 // Открытие сокета и установка обработчиков
 function openSocket(isReconnect = false) {
@@ -38,8 +39,10 @@ function openSocket(isReconnect = false) {
 
   socket.onclose = (evt) => {
     console.warn('WebSocket закрылся', evt.code, evt.reason);
-    // Показываем модалку именно возвращающемуся (восстановившемуся) игроку
-    showReloadModal();
+    if (!selfDisconnect) {
+      showReloadModal(); // показываем только если это было не по инициативе пользователя
+    }
+    selfDisconnect = false; // сбрасываем на будущее
   };
 }
 
@@ -57,7 +60,6 @@ function showReloadModal() {
   connectionPanel.classList.add('hidden');
   gameContainer.classList.add('hidden');
 
-  
   document.body.classList.remove('setup-mode');
 }
 
@@ -138,6 +140,7 @@ function showGame() {
 
 // Очистка всего состояния
 function teardown() {
+  selfDisconnect = true; // помечаем закрытие как намеренное
   sessionStorage.clear();
   secretInput.value = '';
   role = null;
@@ -192,6 +195,10 @@ randomBtn.onclick = () => {
     resetGame();
   }
   randomizeFleetPlacement();
+};
+
+// Обработка кнопки "Готов"
+readyBtn.onclick = () => {
 };
 
 document.addEventListener('touchstart', function (e) {
