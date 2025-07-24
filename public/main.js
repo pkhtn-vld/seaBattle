@@ -18,15 +18,24 @@ let secret_id = null;
 let role = null;
 let selfDisconnect = false;
 
+// Генерим или читаем один раз уникальный playerId
+let playerId = localStorage.getItem('playerId');
+if (!playerId) {
+  playerId = 'pid-' + Date.now() + '-' + Math.floor(Math.random()*1e6);
+  localStorage.setItem('playerId', playerId);
+}
+
 // Открытие сокета и установка обработчиков
 function openSocket(isReconnect = false) {
   socket = new WebSocket('ws://192.168.0.208:3012');
   console.log('Открытие WebSocket…');
 
   socket.onopen = () => {
+    // Включаем playerId в каждый connect/reconnect
+    const base = { secret_id, playerId };
     const msg = isReconnect
-      ? { type: 'reconnect', secret_id, role }
-      : { type: 'connect', secret_id };
+      ? { ...base, type: 'reconnect', role }
+      : { ...base, type: 'connect' };
     console.log('→ Отправка', msg);
     socket.send(JSON.stringify(msg));
   };
@@ -66,6 +75,8 @@ function showReloadModal() {
 
 // Обработка сообщений сервера
 function handleServerMessage(data) {
+  console.log('data.type = \n', data.type);
+  
   switch (data.type) {
     case 'role_assigned':
       role = data.role;
@@ -99,15 +110,6 @@ function handleServerMessage(data) {
       teardown();
       break;
 
-    // case 'battle':
-    //   hideModal();
-    //   console.log("case 'battle'");
-
-    //   import('./battle.js').then(mod => {
-    //     mod.startBattle(role, data.fleet);
-    //   });
-    //   break;
-
     case 'battle':
       console.log('case battle →', data);
       if (!data.battle_ready) {
@@ -115,7 +117,7 @@ function handleServerMessage(data) {
         return;
       }
       hideModal();
-      import('./battle.js').then(mod => mod.startBattle(role, data.fleet));
+      import('./battle.js').then(mod => mod.startBattle(role, data.fleet, teardown));
       break;
 
 
@@ -146,6 +148,9 @@ function hideModal() {
 }
 
 function showGame() {
+  const container = document.getElementById('gameContainer');
+  if (container) container.innerHTML = '';
+
   document.body.classList.add('setup-mode');
   hideModal();
   connectionPanel.classList.add('hidden');
@@ -157,6 +162,11 @@ function showGame() {
   buildGrid(grid, 12);
   initFleetDraggables(fleet);
   enableGridDrop(grid);
+
+  const exitBtn = document.getElementById('exitBtn');
+  if (exitBtn && exitBtn.classList.contains('hidden')) {
+    exitBtn.classList.remove('hidden');
+  }
 }
 
 // Очистка всего состояния
@@ -171,6 +181,7 @@ function teardown() {
   hideModal();
   connectionPanel.classList.remove('hidden');
   gameContainer.classList.add('hidden');
+  document.body.classList.remove('setup-mode');
 }
 
 // Отмена из модалки
@@ -230,7 +241,13 @@ readyBtn.onclick = () => {
 
   if (socket && socket.readyState === WebSocket.OPEN) {
     const fleet = collectFleetData(); // собираем корабли
-    socket.send(JSON.stringify({ type: 'battle_start', secret_id, role, fleet }));
+    socket.send(JSON.stringify({
+      type: 'battle_start',
+      secret_id,
+      role,
+      playerId,
+      fleet
+    }));
     console.log('→ Отправлено событие battle_start');
     showModal('Ожидаем второго игрока…');
   }

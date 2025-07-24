@@ -1,7 +1,7 @@
 // public/battle.js
 import { buildGrid } from './setup.js';
 
-export function startBattle(role, fleet) {
+export function startBattle(role, fleet, teardown) {
   console.log('startBattle()', role);
 
   const container = document.getElementById('gameContainer');
@@ -14,7 +14,20 @@ export function startBattle(role, fleet) {
   wrapper.style.display = 'flex';
   wrapper.style.gap = '20px';
   wrapper.style.flexDirection = 'column';
+  wrapper.style.position = 'relative';
   container.appendChild(wrapper);
+
+  // Создаём кнопку выхода
+  const exitBtn = document.createElement('button');
+  exitBtn.id = 'exitBtn';
+  exitBtn.title = 'Вернуться к выбору комнаты';
+  exitBtn.textContent = '↩';
+  wrapper.appendChild(exitBtn);
+  
+  // Обработка кнопки "Выход"
+  exitBtn.onclick = () => {
+    teardown();
+  };
 
   // Поле игрока
   const myField = document.createElement('div');

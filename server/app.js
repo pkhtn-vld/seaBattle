@@ -53,7 +53,7 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    const { type, secret_id, role: clientRole } = data;
+    const { type, secret_id, role: clientRole, playerId } = data;
     log(`← Получено сообщение ${type}`, 'debug');
 
     if (!secret_id) {
@@ -68,49 +68,62 @@ wss.on('connection', (ws) => {
     }
     const session = sessions[secret_id];
 
+    // Инициализируем mapping playerIds, если нужно
+    session.playerIds = session.playerIds || { player1: null, player2: null };
+
     switch (type) {
 
       case 'connect':
-       // Назначаем роль
-      ws.role = session.sockets.player1 ? 'player2' : 'player1';
+        // Назначаем роль
+        // Если уже был этот playerId — восстанавливаем роль
+        if (session.playerIds.player1 === playerId) {
+          ws.role = 'player1';
+        } else if (session.playerIds.player2 === playerId) {
+          ws.role = 'player2';
+        } else {
+          // Новый игрок — даём первую свободную роль
+          ws.role = session.sockets.player1 ? 'player2' : 'player1';
+          session.playerIds[ws.role] = playerId;
+        }
+        ws.playerId = playerId;
 
-      // Подгружаем battleData из файла, если оба флота там есть
-      {
-        const file = path.join(GAMES_FOLDER, `${secret_id}.json`);
-        if (fs.existsSync(file)) {
-          const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
-          if (saved.player1 && saved.player2) {
-            session.battleData = saved;
-            log(`Подгружены флоты из файла для ${ws.role}`, 'info');
+        // Подгружаем battleData из файла, если оба флота там есть
+        {
+          const file = path.join(GAMES_FOLDER, `${secret_id}.json`);
+          if (fs.existsSync(file)) {
+            const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
+            if (saved.player1 && saved.player2) {
+              session.battleData = saved;
+              log(`Подгружены флоты из файла для ${ws.role}`, 'info');
+            }
           }
         }
-      }
-      break;
+        break;
 
       case 'reconnect':
         // Проверяем роль
-      if (!['player1', 'player2'].includes(clientRole)) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Некорректная роль' }));
-        return;
-      }
-      if (session.sockets[clientRole]) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Роль уже занята' }));
-        return;
-      }
-      ws.role = clientRole;
+        if (!['player1', 'player2'].includes(clientRole) ||
+          session.playerIds[clientRole] !== playerId) {
+          ws.send(JSON.stringify({ type: 'error', message: 'Некорректная роль' }));
+          return;
+        }
+        // Восстанавливаем
+        ws.role = clientRole;
+        ws.playerId = playerId;
+        session.playerIds[ws.role] = playerId;
 
-      // Подгружаем battleData из файла
-      {
-        const file = path.join(GAMES_FOLDER, `${secret_id}.json`);
-        if (fs.existsSync(file)) {
-          const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
-          if (saved.player1 && saved.player2) {
-            session.battleData = saved;
-            log(`Подгружены флоты из файла для ${ws.role}`, 'info');
+        // Подгружаем battleData из файла
+        {
+          const file = path.join(GAMES_FOLDER, `${secret_id}.json`);
+          if (fs.existsSync(file)) {
+            const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
+            if (saved.player1 && saved.player2) {
+              session.battleData = saved;
+              log(`Подгружены флоты из файла для ${ws.role}`, 'info');
+            }
           }
         }
-      }
-      break;
+        break;
 
       case 'battle_start':
         log(`battle_start от ${ws.role} в сессии ${secret_id}`, 'info');
