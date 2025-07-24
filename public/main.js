@@ -1,6 +1,9 @@
 // main.js
 
 import { buildGrid, initFleetDraggables, enableGridDrop, populateFleetPanel, createGameContent } from './setup.js';
+import { disableDoubleTapZoom } from './mobileEvents.js';
+
+disableDoubleTapZoom();
 
 const connectBtn = document.getElementById('connectBtn');
 const cancelBtn = document.getElementById('cancelBtn');
@@ -119,7 +122,7 @@ function handleServerMessage(data) {
       }
       hideModal();
       import('./battle.js').then(mod => {
-        mod.startBattle(role, data.fleet, teardown, socket, secret_id, playerId);
+        mod.startBattle(role, data.fleet, teardown, socket, secret_id, playerId, data.shots || []);
 
         // получаем DOM-поля
         myField = document.getElementById('myField');
@@ -140,7 +143,7 @@ function handleServerMessage(data) {
     case 'shot_result': {
       const { x, y, isHit, by, turn, sunk, gameOver, winner } = data;
 
-      // 1) Отметить попадание/промах в конкретной клетке
+      // Отметить попадание/промах в конкретной клетке
       const targetField = (by === role) ? enemyField : myField;
       const targetCell = targetField
         .querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
@@ -148,7 +151,7 @@ function handleServerMessage(data) {
         targetCell.classList.add(isHit ? 'hit' : 'miss');
       }
 
-      // 2) Если корабль утонул, обвести вокруг ВСЕ его клетки — и у стрелявшего, и у защищающегося
+      // Если корабль утонул, обвести вокруг ВСЕ его клетки — и у стрелявшего, и у защищающегося
       if (sunk) {
         const deltas = [
           [-1, -1], [-1, 0], [-1, 1],
@@ -162,6 +165,8 @@ function handleServerMessage(data) {
         sunk.coords.forEach(({ x: sx, y: sy }) => {
           deltas.forEach(([dx, dy]) => {
             const nx = sx + dx, ny = sy + dy;
+            console.log(`поля для miss \n x=${nx} y=${ny}`);
+            
             const cell = ringField.querySelector(`.cell[data-x="${nx}"][data-y="${ny}"]`);
             if (cell && !cell.classList.contains('hit')) {
               cell.classList.add('miss');
@@ -170,17 +175,20 @@ function handleServerMessage(data) {
         });
       }
 
-      // 3) Обновляем очередь по серверному полю turn
+      // Обновляем очередь по серверному полю turn
       currentTurn = turn;
       if (!gameOver) {
         const myTurn = (currentTurn === role);
         enemyField.style.pointerEvents = myTurn ? 'auto' : 'none';
-        myField.style.pointerEvents = myTurn ? 'none' : 'auto';
       }
 
-      // 4) Конец игры
+      // Конец игры
       if (gameOver) {
-        alert(`Конец игры! Победил ${winner}`);
+        if (winner === role) {
+          alert('Поздравляем 🎉🎉, Вы победили 🏆');
+        } else {
+          alert('К сожалению, вы проиграли ☠️');
+        }
         teardown();
       }
       break;
@@ -225,7 +233,7 @@ function showGame() {
   const grid = document.getElementById('playerGrid');
   const fleet = document.getElementById('fleetPanel');
   populateFleetPanel();
-  buildGrid(grid, 12);
+  buildGrid(grid, 13);
   initFleetDraggables(fleet);
   enableGridDrop(grid);
 
@@ -276,25 +284,3 @@ connectBtn.onclick = () => {
   }
   openSocket(false);
 };
-
-
-document.addEventListener('touchstart', function (e) {
-  if (e.touches.length > 1) {
-    e.preventDefault(); // блокирует pinch-to-zoom
-  }
-}, { passive: false });
-
-let tapTimeout = null;
-
-document.addEventListener('touchstart', function (e) {
-  if (tapTimeout !== null) {
-    clearTimeout(tapTimeout);     // отменяем предыдущий таймер
-    tapTimeout = null;
-    e.preventDefault();           // отменяем второй тап
-  } else {
-    tapTimeout = setTimeout(() => {
-      tapTimeout = null;          // сбрасываем через 500 мс
-    }, 500);
-  }
-}, { passive: false });
-

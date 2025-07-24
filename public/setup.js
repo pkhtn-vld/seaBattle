@@ -119,8 +119,8 @@ const moveGhost = createGhostMover();
 export function buildGrid(container, yCount) {
   if (container) {
     container.innerHTML = '';
-    for (let y = 0; y < yCount; y++) {
-      for (let x = 0; x < 10; x++) {
+    for (let y = 1; y < yCount; y++) {
+      for (let x = 1; x < 11; x++) {
         const cell = document.createElement('div');
         cell.className = 'cell';
         cell.dataset.x = x;

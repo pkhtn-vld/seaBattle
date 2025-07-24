@@ -12,7 +12,8 @@ html body {
   justify-content: center;
   padding: 0;
 
-   -webkit-user-select: none; /* Safari / iOS */
+  touch-action: manipulation;
+  -webkit-user-select: none; /* Safari / iOS */
   user-select: none;         /* Стандарт */
   -webkit-touch-callout: none; /* убирает всплывающее меню при долгом нажатии */
 }
@@ -45,7 +46,7 @@ h2 {
 }
 
 .cell:hover {
-  opacity: .7;
+  /* opacity: .7; */
   cursor: pointer;
 }
 
@@ -75,7 +76,7 @@ h2 {
 }
 
 .ship[data-length="1"] {
-  width: 30px;
+  width: 26px;
   height: 26px;
 }
 
@@ -236,7 +237,7 @@ h2 {
   transform: scale(0.95);
 }
 
-.cell[data-y="10"], .cell[data-y="11"] {
+.cell[data-y="11"], .cell[data-y="12"] {
   opacity: 0;
   cursor: default;
 }

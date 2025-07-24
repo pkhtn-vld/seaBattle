@@ -1,7 +1,7 @@
 // public/battle.js
 import { buildGrid } from './setup.js';
 
-export function startBattle(role, fleet, teardown, socket, secret_id, playerId) {
+export function startBattle(role, fleet, teardown, socket, secret_id, playerId, shots = []) {
   console.log('startBattle()', role);
 
   const container = document.getElementById('gameContainer');
@@ -34,7 +34,7 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId) 
   myField.id = 'myField';
   myField.className = 'grid';
   wrapper.appendChild(myField);
-  buildGrid(myField, 10);
+  buildGrid(myField, 11);
 
   // Рисуем корабли на myField
   Object.values(fleet).flat().forEach(({ x, y }) => {
@@ -51,7 +51,7 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId) 
   enemyField.id = 'enemyField';
   enemyField.className = 'grid';
   wrapper.appendChild(enemyField);
-  buildGrid(enemyField, 10);
+  buildGrid(enemyField, 11);
 
   // Навесим обработчики на клетки врага
   enemyField.querySelectorAll('.cell').forEach(cell => {
@@ -67,5 +67,27 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId) 
         x, y
       }));
     });
+  });
+
+  // Восстанавливаем все предыдущие выстрелы
+  shots.forEach(({ x, y, isHit, by, sunk }) => {
+    const targetField = (by === role) ? enemyField : myField;
+    const cell = targetField.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
+    if (cell) cell.classList.add(isHit ? 'hit' : 'miss');
+
+    if (sunk) {
+      // то же, что у вас в handleServerMessage для sunk
+      const ringField = (by === role) ? enemyField : myField;
+      const deltas = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+      sunk.coords.forEach(({ x: sx, y: sy }) => {
+        deltas.forEach(([dx, dy]) => {
+          const nx = sx + dx, ny = sy + dy;
+          const ringCell = ringField.querySelector(`.cell[data-x="${nx}"][data-y="${ny}"]`);
+          if (ringCell && !ringCell.classList.contains('hit')) {
+            ringCell.classList.add('miss');
+          }
+        });
+      });
+    }
   });
 }

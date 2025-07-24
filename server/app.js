@@ -94,6 +94,10 @@ wss.on('connection', (ws) => {
             const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
             if (saved.player1 && saved.player2) {
               session.battleData = saved;
+              session.initialFleets = {
+                player1: JSON.parse(JSON.stringify(saved.player1)),
+                player2: JSON.parse(JSON.stringify(saved.player2))
+              };
               log(`Подгружены флоты из файла для ${ws.role}`, 'info');
             }
           }
@@ -119,6 +123,10 @@ wss.on('connection', (ws) => {
             const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
             if (saved.player1 && saved.player2) {
               session.battleData = saved;
+              session.initialFleets = {
+                player1: JSON.parse(JSON.stringify(saved.player1)),
+                player2: JSON.parse(JSON.stringify(saved.player2))
+              };
               log(`Подгружены флоты из файла для ${ws.role}`, 'info');
             }
           }
@@ -131,6 +139,8 @@ wss.on('connection', (ws) => {
         // Инициализируем battleData, если её нет
         session.battleData = session.battleData || {};
         session.battleData[ws.role] = data.fleet; // сохраняем данные флота
+        // Инициализируем историю выстрелов, если нужно
+        session.battleData.shots = session.battleData.shots || [];
 
         // Сохраняем на диск
         fs.writeFileSync(
@@ -150,6 +160,9 @@ wss.on('connection', (ws) => {
             player2: JSON.parse(JSON.stringify(session.battleData.player2))
           };
 
+          // Включаем initialFleets в сохраняемый JSON
+          session.battleData.initialFleets = session.initialFleets;
+
           // Сохраняем на диск вместе с turn
           fs.writeFileSync(
             path.join(GAMES_FOLDER, `${secret_id}.json`),
@@ -163,7 +176,8 @@ wss.on('connection', (ws) => {
               type: 'battle',
               fleet: session.battleData[roleKey],
               battle_ready: true,
-              turn: session.battleData.turn
+              turn: session.battleData.turn,
+              shots: session.battleData.shots
             });
           });
         }
@@ -181,7 +195,8 @@ wss.on('connection', (ws) => {
 
         // Определяем противника
         const enemyRole = ws.role === 'player1' ? 'player2' : 'player1';
-        const enemyFleet = bd[enemyRole];   // это объект: { carrier: [...], … }
+        const enemyFleet = bd[enemyRole];
+
         let isHit = false;
         let sunk = null;
 
@@ -190,10 +205,14 @@ wss.on('connection', (ws) => {
           const idx = coords.findIndex(p => p.x === x && p.y === y);
           if (idx !== -1) {
             isHit = true;
+            // Сколько осталось до удаления
+            const before = coords.length;
             coords.splice(idx, 1);
+            const after = coords.length;
+            log(`Попадание в ${shipName} у ${enemyRole}: до=${before}, после=${after}`, 'debug');
 
-            if (coords.length === 0) {
-              // Берём полные coords из initialFleets, а не из уже «подрезанного» массива
+            if (after === 0) {
+              log(`→ Корабль ${shipName} потоплен!`, 'info');
               sunk = {
                 ship: shipName,
                 coords: session.initialFleets[enemyRole][shipName]
@@ -225,12 +244,33 @@ wss.on('connection', (ws) => {
 
         if (sunk) result.sunk = sunk;
 
-        // Сохраняем новый state
-        fs.writeFileSync(
-          path.join(GAMES_FOLDER, `${secret_id}.json`),
-          JSON.stringify(bd, null, 2)
-        );
+        // Добавляем запись в историю
+        bd.shots = bd.shots || [];
+        bd.shots.push({
+          x,
+          y,
+          isHit,
+          by: ws.role,
+          sunk: sunk || null,
+          gameOver: gameOver,
+          winner: gameOver ? ws.role : null
+        });
 
+        const filePath = path.join(GAMES_FOLDER, `${secret_id}.json`);
+        if (gameOver) {
+          // удаляем игру
+          try {
+            fs.unlinkSync(filePath);
+            log(`Игра ${secret_id} окончена, файл удалён`, 'info');
+          } catch (e) {
+            log(`Не удалось удалить файл ${filePath}: ${e.message}`, 'error');
+          }
+          delete sessions[secret_id];
+        } else {
+          // сохраняем обновления
+          fs.writeFileSync(filePath, JSON.stringify(bd, null, 2));
+          log(`Игра ${secret_id} обновлена после выстрела`, 'debug');
+        }
         // Рассылаем результат обоим игрокам
         send(session.sockets.player1, result);
         send(session.sockets.player2, result);
@@ -282,7 +322,8 @@ wss.on('connection', (ws) => {
           type: 'battle',
           fleet: session.battleData[roleKey],
           battle_ready: true,
-          turn: session.battleData.turn
+          turn: session.battleData.turn,
+          shots: session.battleData.shots
         }));
       });
     }
