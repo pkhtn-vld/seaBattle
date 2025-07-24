@@ -104,7 +104,7 @@ wss.on('connection', (ws) => {
         // Проверяем роль
         if (!['player1', 'player2'].includes(clientRole) ||
           session.playerIds[clientRole] !== playerId) {
-          ws.send(JSON.stringify({ type: 'error', message: 'Некорректная роль' }));
+          // ws.send(JSON.stringify({ type: 'error', message: 'Некорректная роль' }));
           return;
         }
         // Восстанавливаем
@@ -141,16 +141,101 @@ wss.on('connection', (ws) => {
 
         // Если оба игрока прислали данные — начинаем бой
         if (session.battleData.player1 && session.battleData.player2) {
-          log(`Оба игрока готовы. Бой начинается: ${secret_id}`, 'info');
+          // Выбираем, кто ходит первым
+          session.battleData.turn = session.battleData.turn || 'player1';
+
+          // Сохраняем чистую копию каждого флота для определения sunk‑coords
+          session.initialFleets = {
+            player1: JSON.parse(JSON.stringify(session.battleData.player1)),
+            player2: JSON.parse(JSON.stringify(session.battleData.player2))
+          };
+
+          // Сохраняем на диск вместе с turn
+          fs.writeFileSync(
+            path.join(GAMES_FOLDER, `${secret_id}.json`),
+            JSON.stringify(session.battleData, null, 2)
+          );
+          log(`Оба игрока готовы. Бой начинается: ${secret_id}, ходит ${session.battleData.turn}`, 'info');
+
+          // Рассылаем обоим игрокам сообщение о начале боя
           ['player1', 'player2'].forEach(roleKey => {
             send(session.sockets[roleKey], {
               type: 'battle',
               fleet: session.battleData[roleKey],
-              battle_ready: true
+              battle_ready: true,
+              turn: session.battleData.turn
             });
           });
         }
         return;
+
+      case 'shoot': {
+        const { x, y } = data;
+        const session = sessions[secret_id];
+        const bd = session.battleData;
+
+        // Проверка очереди
+        if (bd.turn !== ws.role) {
+          return send(ws, { type: 'error', message: 'Сейчас не ваш ход' });
+        }
+
+        // Определяем противника
+        const enemyRole = ws.role === 'player1' ? 'player2' : 'player1';
+        const enemyFleet = bd[enemyRole];   // это объект: { carrier: [...], … }
+        let isHit = false;
+        let sunk = null;
+
+        // Ищем попадание по каждому кораблю
+        for (const [shipName, coords] of Object.entries(enemyFleet)) {
+          const idx = coords.findIndex(p => p.x === x && p.y === y);
+          if (idx !== -1) {
+            isHit = true;
+            coords.splice(idx, 1);
+
+            if (coords.length === 0) {
+              // Берём полные coords из initialFleets, а не из уже «подрезанного» массива
+              sunk = {
+                ship: shipName,
+                coords: session.initialFleets[enemyRole][shipName]
+              };
+            }
+            break;
+          }
+        }
+
+        // Проверяем, всё ли корабли уничтожены
+        const gameOver = Object.values(enemyFleet).every(coords => coords.length === 0);
+
+        // Если промах — переключаем ход, иначе оставляем текущего
+        if (!isHit && !gameOver) bd.turn = enemyRole;
+
+        // Результат выстрела
+        const result = {
+          type: 'shot_result',
+          x, y,
+          isHit,
+          by: ws.role,
+          turn: bd.turn
+        };
+
+        if (gameOver) {
+          result.gameOver = true;
+          result.winner = ws.role;
+        }
+
+        if (sunk) result.sunk = sunk;
+
+        // Сохраняем новый state
+        fs.writeFileSync(
+          path.join(GAMES_FOLDER, `${secret_id}.json`),
+          JSON.stringify(bd, null, 2)
+        );
+
+        // Рассылаем результат обоим игрокам
+        send(session.sockets.player1, result);
+        send(session.sockets.player2, result);
+        return;
+      }
 
       default:
         ws.send(JSON.stringify({ type: 'error', message: 'Неизвестный тип' }));
@@ -196,7 +281,8 @@ wss.on('connection', (ws) => {
         session.sockets[roleKey].send(JSON.stringify({
           type: 'battle',
           fleet: session.battleData[roleKey],
-          battle_ready: true
+          battle_ready: true,
+          turn: session.battleData.turn
         }));
       });
     }

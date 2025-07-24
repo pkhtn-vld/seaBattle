@@ -274,3 +274,13 @@ h2 {
     justify-content: center;
     cursor: pointer;
 }
+
+.cell.miss {
+  background-color: red;
+  pointer-events: none;
+}
+
+.cell.hit {
+  background-color: green;
+  pointer-events: none;
+}

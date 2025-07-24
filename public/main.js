@@ -1,6 +1,6 @@
 // main.js
 
-import { buildGrid, initFleetDraggables, enableGridDrop, rotateFleetShips, resetGame, randomizeFleetPlacement, populateFleetPanel, collectFleetData } from './setup.js';
+import { buildGrid, initFleetDraggables, enableGridDrop, populateFleetPanel, createGameContent } from './setup.js';
 
 const connectBtn = document.getElementById('connectBtn');
 const cancelBtn = document.getElementById('cancelBtn');
@@ -9,19 +9,20 @@ const modalText = modal.querySelector('p');
 const secretInput = document.getElementById('secretInput');
 const connectionPanel = document.getElementById('connectionPanel');
 const gameContainer = document.getElementById('gameContainer');
-const rotateBtn = document.getElementById('rotateBtn');
-const readyBtn = document.getElementById('readyBtn');
-const randomBtn = document.getElementById('randomBtn');
 
 let socket = null;
 let secret_id = null;
 let role = null;
 let selfDisconnect = false;
 
+let myField = null;
+let enemyField = null;
+let currentTurn = null;
+
 // Генерим или читаем один раз уникальный playerId
 let playerId = localStorage.getItem('playerId');
 if (!playerId) {
-  playerId = 'pid-' + Date.now() + '-' + Math.floor(Math.random()*1e6);
+  playerId = 'pid-' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
   localStorage.setItem('playerId', playerId);
 }
 
@@ -76,7 +77,7 @@ function showReloadModal() {
 // Обработка сообщений сервера
 function handleServerMessage(data) {
   console.log('data.type = \n', data.type);
-  
+
   switch (data.type) {
     case 'role_assigned':
       role = data.role;
@@ -117,9 +118,73 @@ function handleServerMessage(data) {
         return;
       }
       hideModal();
-      import('./battle.js').then(mod => mod.startBattle(role, data.fleet, teardown));
+      import('./battle.js').then(mod => {
+        mod.startBattle(role, data.fleet, teardown, socket, secret_id, playerId);
+
+        // получаем DOM-поля
+        myField = document.getElementById('myField');
+        enemyField = document.getElementById('enemyField');
+        currentTurn = data.turn;
+
+        // ставим активности полей по очередности
+        if (currentTurn === role) {
+          // ваш ход — можно кликать по врагу
+          enemyField.style.pointerEvents = 'auto';
+        } else {
+          // ждёшь хода соперника
+          enemyField.style.pointerEvents = 'none';
+        }
+      });
       break;
 
+    case 'shot_result': {
+      const { x, y, isHit, by, turn, sunk, gameOver, winner } = data;
+
+      // 1) Отметить попадание/промах в конкретной клетке
+      const targetField = (by === role) ? enemyField : myField;
+      const targetCell = targetField
+        .querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
+      if (targetCell) {
+        targetCell.classList.add(isHit ? 'hit' : 'miss');
+      }
+
+      // 2) Если корабль утонул, обвести вокруг ВСЕ его клетки — и у стрелявшего, и у защищающегося
+      if (sunk) {
+        const deltas = [
+          [-1, -1], [-1, 0], [-1, 1],
+          [0, -1], [0, 1],
+          [1, -1], [1, 0], [1, 1]
+        ];
+
+        // Выбираем поле, на котором рисуем «промахи вокруг»
+        const ringField = (by === role) ? enemyField : myField;
+
+        sunk.coords.forEach(({ x: sx, y: sy }) => {
+          deltas.forEach(([dx, dy]) => {
+            const nx = sx + dx, ny = sy + dy;
+            const cell = ringField.querySelector(`.cell[data-x="${nx}"][data-y="${ny}"]`);
+            if (cell && !cell.classList.contains('hit')) {
+              cell.classList.add('miss');
+            }
+          });
+        });
+      }
+
+      // 3) Обновляем очередь по серверному полю turn
+      currentTurn = turn;
+      if (!gameOver) {
+        const myTurn = (currentTurn === role);
+        enemyField.style.pointerEvents = myTurn ? 'auto' : 'none';
+        myField.style.pointerEvents = myTurn ? 'none' : 'auto';
+      }
+
+      // 4) Конец игры
+      if (gameOver) {
+        alert(`Конец игры! Победил ${winner}`);
+        teardown();
+      }
+      break;
+    }
 
     case 'error':
       alert(data.message || 'Неизвестная ошибка');
@@ -150,6 +215,7 @@ function hideModal() {
 function showGame() {
   const container = document.getElementById('gameContainer');
   if (container) container.innerHTML = '';
+  createGameContent(socket, role, secret_id, playerId, showModal);
 
   document.body.classList.add('setup-mode');
   hideModal();
@@ -211,47 +277,6 @@ connectBtn.onclick = () => {
   openSocket(false);
 };
 
-// Обработка кнопки "Повернуть"
-rotateBtn.onclick = () => {
-  rotateFleetShips();
-};
-
-// Обработка кнопки "Сброс"
-document.getElementById('resetBtn').addEventListener('click', resetGame);
-
-// Обработка кнопки "Случайное расположение"
-randomBtn.onclick = () => {
-  const fleetPanel = document.getElementById('fleetPanel');
-  // если все корабли уже расставлены — сначала сброс
-  if (fleetPanel.querySelectorAll('.ship').length === 0) {
-    resetGame();
-  }
-  randomizeFleetPlacement();
-};
-
-// Обработка кнопки "Готов"
-readyBtn.onclick = () => {
-
-  // проверяем что все корабли установлены
-  const fleetPanel = document.getElementById('fleetPanel');
-  if (fleetPanel.children.length > 0) {
-    alert('Пожалуйста, расставьте все корабли на поле');
-    return;
-  }
-
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    const fleet = collectFleetData(); // собираем корабли
-    socket.send(JSON.stringify({
-      type: 'battle_start',
-      secret_id,
-      role,
-      playerId,
-      fleet
-    }));
-    console.log('→ Отправлено событие battle_start');
-    showModal('Ожидаем второго игрока…');
-  }
-};
 
 document.addEventListener('touchstart', function (e) {
   if (e.touches.length > 1) {

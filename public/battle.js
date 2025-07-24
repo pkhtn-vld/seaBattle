@@ -1,7 +1,7 @@
 // public/battle.js
 import { buildGrid } from './setup.js';
 
-export function startBattle(role, fleet, teardown) {
+export function startBattle(role, fleet, teardown, socket, secret_id, playerId) {
   console.log('startBattle()', role);
 
   const container = document.getElementById('gameContainer');
@@ -23,7 +23,7 @@ export function startBattle(role, fleet, teardown) {
   exitBtn.title = 'Вернуться к выбору комнаты';
   exitBtn.textContent = '↩';
   wrapper.appendChild(exitBtn);
-  
+
   // Обработка кнопки "Выход"
   exitBtn.onclick = () => {
     teardown();
@@ -59,7 +59,13 @@ export function startBattle(role, fleet, teardown) {
       const x = +cell.dataset.x;
       const y = +cell.dataset.y;
       console.log(`Выстрел по (${x}, ${y})`);
-      // TODO: отправка выстрела на сервер
+
+      // отправка выстрела на сервер
+      socket.send(JSON.stringify({
+        type: 'shoot',
+        secret_id, role, playerId,
+        x, y
+      }));
     });
   });
 }

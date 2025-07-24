@@ -164,7 +164,7 @@ export function populateFleetPanel() {
 // Обработка превью и drop на гриде
 export function enableGridDrop(gridEl) {
   if (!gridEl) return;
-  
+
   gridEl.addEventListener('dragover', (e) => {
     e.preventDefault();
     if (!currentDraggedData) return;
@@ -224,7 +224,7 @@ function clearPreview() {
 }
 
 // Размещает корабль и помечает ячейки
-export function placeShipOnGrid(length, x, y, shipId, orientation) {
+function placeShipOnGrid(length, x, y, shipId, orientation) {
   const cells = [];
   for (let i = 0; i < length; i++) {
     const tx = orientation === 'horizontal' ? x + i : x;
@@ -248,7 +248,7 @@ export function placeShipOnGrid(length, x, y, shipId, orientation) {
 }
 
 // Случайное размещение оставшихся кораблей (с учётом буфера)
-export function randomizeFleetPlacement() {
+function randomizeFleetPlacement() {
   const grid = document.getElementById('playerGrid');
   const fleetPanel = document.getElementById('fleetPanel');
   const ships = Array.from(fleetPanel.querySelectorAll('.ship'));
@@ -307,7 +307,7 @@ function cellIsFreeWithBuffer(cell) {
 }
 
 // Поворот флота
-export function rotateFleetShips() {
+function rotateFleetShips() {
   const ships = document.querySelectorAll('#fleetPanel .ship');
 
   ships.forEach(ship => {
@@ -333,14 +333,14 @@ export function rotateFleetShips() {
 }
 
 // Обработчка кнопки сброса
-export function resetGame() {
-  // 1. Очищаем все ячейки
+function resetGame() {
+  // Очищаем все ячейки
   document.querySelectorAll('.cell').forEach(cell => {
     cell.classList.remove('occupied', 'preview-ok', 'preview-bad');
     delete cell.dataset.shipId;
   });
 
-  // 2. Сбрасываем корабли
+  // Сбрасываем корабли
   const fleetPanel = document.getElementById('fleetPanel');
   fleetPanel.innerHTML = ''; // убираем старые корабли
   shipCounter = 1;
@@ -359,7 +359,7 @@ export function resetGame() {
   initFleetDraggables(fleetPanel);
 }
 
-export function collectFleetData() {
+function collectFleetData() {
   const grid = document.getElementById('playerGrid');
   const cells = grid.querySelectorAll('.cell[data-ship-id]');
   const fleet = {};
@@ -374,4 +374,102 @@ export function collectFleetData() {
   });
 
   return fleet;
+}
+
+export function createGameContent(socket, role, secret_id, playerId, showModal) {
+  const gameContainer = document.getElementById('gameContainer');
+  if (!gameContainer) return;
+
+  // Очистим контейнер (на всякий случай)
+  gameContainer.innerHTML = '';
+
+  // Заголовок
+  const title = document.createElement('h2');
+  title.textContent = 'Разместите свои корабли';
+  gameContainer.appendChild(title);
+
+  // Центральная область
+  const middle = document.createElement('div');
+  middle.className = 'container-middle';
+
+  const playerGrid = document.createElement('div');
+  playerGrid.id = 'playerGrid';
+  playerGrid.className = 'grid';
+
+  const fleetPanel = document.createElement('div');
+  fleetPanel.id = 'fleetPanel';
+
+  middle.appendChild(playerGrid);
+  middle.appendChild(fleetPanel);
+  gameContainer.appendChild(middle);
+
+  // Кнопки управления
+  const controls = document.createElement('div');
+  controls.id = 'controls';
+
+  const rotateBtn = document.createElement('button');
+  rotateBtn.id = 'rotateBtn';
+  rotateBtn.textContent = 'Повернуть';
+
+  const readyBtn = document.createElement('button');
+  readyBtn.id = 'readyBtn';
+  readyBtn.textContent = 'Готов';
+
+  const resetBtn = document.createElement('button');
+  resetBtn.id = 'resetBtn';
+  resetBtn.textContent = 'Сброс';
+
+  const randomBtn = document.createElement('button');
+  randomBtn.id = 'randomBtn';
+  randomBtn.textContent = '🎲';
+
+  controls.appendChild(rotateBtn);
+  controls.appendChild(readyBtn);
+  controls.appendChild(resetBtn);
+  controls.appendChild(randomBtn);
+
+  gameContainer.appendChild(controls);
+
+  // Обработка кнопки "Повернуть"
+  rotateBtn.onclick = () => {
+    rotateFleetShips();
+  };
+
+  // Обработка кнопки "Сброс"
+  document.getElementById('resetBtn').addEventListener('click', resetGame);
+
+  // Обработка кнопки "Случайное расположение"
+  randomBtn.onclick = () => {
+    const fleetPanel = document.getElementById('fleetPanel');
+    // если все корабли уже расставлены — сначала сброс
+    if (fleetPanel.querySelectorAll('.ship').length === 0) {
+      resetGame();
+    }
+    randomizeFleetPlacement();
+  };
+
+
+  // Обработка кнопки "Готов"
+  readyBtn.onclick = () => {
+
+    // проверяем что все корабли установлены
+    const fleetPanel = document.getElementById('fleetPanel');
+    if (fleetPanel.children.length > 0) {
+      alert('Пожалуйста, расставьте все корабли на поле');
+      return;
+    }
+
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      const fleet = collectFleetData(); // собираем корабли
+      socket.send(JSON.stringify({
+        type: 'battle_start',
+        secret_id,
+        role,
+        playerId,
+        fleet
+      }));
+      console.log('→ Отправлено событие battle_start');
+      showModal('Ожидаем второго игрока…');
+    }
+  };
 }
