@@ -8,13 +8,18 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId, 
   container.classList.remove('hidden');
   container.innerHTML = '';
 
+  // Заголовок
+  const title = document.createElement('h2');
+  title.id = 'game-title';
+  title.textContent = 'Ожидание ответа сервера ⏳';
+  container.appendChild(title);
+
   // Создаём обёртку, чтобы расположить поля рядом
   const wrapper = document.createElement('div');
   wrapper.id = 'battleWrapper';
   wrapper.style.display = 'flex';
   wrapper.style.gap = '20px';
   wrapper.style.flexDirection = 'column';
-  wrapper.style.position = 'relative';
   container.appendChild(wrapper);
 
   // Создаём кнопку выхода
@@ -32,7 +37,7 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId, 
   // Поле игрока
   const myField = document.createElement('div');
   myField.id = 'myField';
-  myField.className = 'grid';
+  myField.className = 'gridMini';
   wrapper.appendChild(myField);
   buildGrid(myField, 11);
 

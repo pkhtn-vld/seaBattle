@@ -272,11 +272,8 @@ function randomizeFleetPlacement() {
     // Пробуем разместить
     let placed = false;
     while (!placed) {
-      const x = Math.floor(Math.random() * 10);
-      // для вертикали y — нижняя клетка
-      const y = orientation === 'horizontal'
-        ? Math.floor(Math.random() * 10)
-        : Math.floor(Math.random() * 10) + (length - 1);
+      const x = Math.floor(Math.random() * 10) + 1;
+      const y = Math.floor(Math.random() * (11 - length)) + 1;
       // генерим id, если ещё нет
       const id = shipEl.dataset.id || `ship_${shipCounter++}`;
       shipEl.dataset.id = id;
@@ -296,7 +293,7 @@ function cellIsFreeWithBuffer(cell) {
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
       const nx = x + dx, ny = y + dy;
-      if (nx < 0 || nx >= 10 || ny < 0 || ny >= 10) continue;
+      if (nx < 1 || nx > 10 || ny < 1 || ny > 10) continue;
       const neighbor = document.querySelector(
         `.cell[data-x="${nx}"][data-y="${ny}"]`
       );
@@ -311,26 +308,24 @@ function rotateFleetShips() {
   const ships = document.querySelectorAll('#fleetPanel .ship');
 
   ships.forEach(ship => {
-    const length = +ship.dataset.length;                     // число клеток
-    const isVertical = ship.dataset.orientation === 'vertical';
+    const rect = ship.getBoundingClientRect(); // Получаем текущие размеры
+    const currentWidth = rect.width;
+    const currentHeight = rect.height;
 
-    if (isVertical) {
-      ship.dataset.orientation = 'horizontal';
-      ship.style.width = `${length * 30}px`; // длина по X
-      ship.style.height = `30px`; // толщина
+    // Меняем ориентацию
+    const newOrientation = ship.dataset.orientation === 'vertical' ? 'horizontal' : 'vertical';
+    ship.dataset.orientation = newOrientation;
 
-      ship.classList.remove('vertical');
-      ship.classList.add('horizontal');
-    } else {
-      ship.dataset.orientation = 'vertical';
-      ship.style.width = `30px`; // толщина
-      ship.style.height = `${length * 30}px`; // длина по Y
+    // Меняем классы
+    ship.classList.toggle('horizontal');
+    ship.classList.toggle('vertical');
 
-      ship.classList.remove('horizontal');
-      ship.classList.add('vertical');
-    }
+    // Меняем размеры
+    ship.style.width = `${currentHeight - 4}px`;
+    ship.style.height = `${currentWidth - 4}px`;
   });
 }
+
 
 // Обработчка кнопки сброса
 function resetGame() {
@@ -376,7 +371,7 @@ function collectFleetData() {
   return fleet;
 }
 
-export function createGameContent(socket, role, secret_id, playerId, showModal) {
+export function createGameContent(socket, role, secret_id, playerId, showModal, teardown) {
   const gameContainer = document.getElementById('gameContainer');
   if (!gameContainer) return;
 
@@ -427,6 +422,19 @@ export function createGameContent(socket, role, secret_id, playerId, showModal) 
   controls.appendChild(readyBtn);
   controls.appendChild(resetBtn);
   controls.appendChild(randomBtn);
+
+    // Создаём кнопку выхода
+  const exitBtn = document.createElement('button');
+  exitBtn.id = 'exitBtn';
+  exitBtn.title = 'Вернуться к выбору комнаты';
+  exitBtn.textContent = '↩';
+  exitBtn.classList.add('setup');
+  controls.appendChild(exitBtn);
+
+  // Обработка кнопки "Выход"
+  exitBtn.onclick = () => {
+    teardown();
+  };
 
   gameContainer.appendChild(controls);
 

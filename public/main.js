@@ -133,9 +133,11 @@ function handleServerMessage(data) {
         if (currentTurn === role) {
           // ваш ход — можно кликать по врагу
           enemyField.style.pointerEvents = 'auto';
+          document.getElementById('game-title').textContent = 'Ваш ход 🎮'
         } else {
           // ждёшь хода соперника
           enemyField.style.pointerEvents = 'none';
+          document.getElementById('game-title').textContent = 'Ожидание хода соперника ⏳'
         }
       });
       break;
@@ -180,6 +182,7 @@ function handleServerMessage(data) {
       if (!gameOver) {
         const myTurn = (currentTurn === role);
         enemyField.style.pointerEvents = myTurn ? 'auto' : 'none';
+        document.getElementById('game-title').textContent = myTurn ? 'Ваш ход 🎮' : 'Ожидание хода соперника ⏳';
       }
 
       // Конец игры
@@ -223,7 +226,7 @@ function hideModal() {
 function showGame() {
   const container = document.getElementById('gameContainer');
   if (container) container.innerHTML = '';
-  createGameContent(socket, role, secret_id, playerId, showModal);
+  createGameContent(socket, role, secret_id, playerId, showModal, teardown);
 
   document.body.classList.add('setup-mode');
   hideModal();

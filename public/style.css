@@ -4,7 +4,8 @@ html body {
   background-color: #f0f4f7;
   text-align: center;
   padding: 20px;
-  height: calc(var(--vh, 1vh) * 80);
+  height: calc(var(--vh, 1vh) * 98);
+  position: relative;
   margin: 0;
   overflow: hidden;
   display: flex;
@@ -13,14 +14,13 @@ html body {
   padding: 0;
 
   touch-action: manipulation;
-  -webkit-user-select: none; /* Safari / iOS */
-  user-select: none;         /* Стандарт */
-  -webkit-touch-callout: none; /* убирает всплывающее меню при долгом нажатии */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 h2 {
-  margin-top: 0;
-  margin-bottom: 10px;
+  margin: 0 0 10px 0;
 }
 
 .hidden {
@@ -37,9 +37,30 @@ h2 {
   place-items: center;
 }
 
-.cell {
+.gridMini {
+  display: grid;
+  grid-template-columns: repeat(10, 20px);
+  grid-template-rows: repeat(10, 20px);
+  gap: 2px;
+  margin-bottom: 10px;
+  place-items: center;
+}
+
+#enemyField .cell, #playerGrid .cell {
   width: 30px;
   height: 30px;
+  background-color: #d0e4f5;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+}
+
+#playerGrid, #playerGrid .cell {
+  cursor: default;
+}
+
+#myField .cell {
+  width: 20px;
+  height: 20px;
   background-color: #d0e4f5;
   border: 1px solid #ccc;
   box-sizing: border-box;
@@ -71,10 +92,6 @@ h2 {
   cursor: grab;
 }
 
-.ship.selected {
-  outline: 3px solid #00aaff;
-}
-
 .ship[data-length="1"] {
   width: 26px;
   height: 26px;
@@ -96,12 +113,13 @@ h2 {
 }
 
 /* Размещение корабля на поле */
-.occupied {
+#playerGrid .cell.occupied, #enemyField .cell.occupied {
   background-color: #99c;
 }
 
 /* Кнопки управления */
 #controls {
+  position: relative;
   margin-top: 5px;
   display: flex;
 }
@@ -153,6 +171,7 @@ h2 {
 }
 
 #gameContainer {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -251,9 +270,14 @@ h2 {
 }
 
 @media screen and (max-width: 767px) and (orientation: portrait) {
-  .setup-mode {
-    align-items: start;
-  }
+  /* .setup-mode {
+    align-items: end;
+  } */
+
+  /* #gameContainer {
+    position: absolute;
+    bottom: 0;
+  } */
 }
 
 #myField, #enemyField {
@@ -261,27 +285,44 @@ h2 {
 }
 
 #exitBtn {
-    position: absolute;
-    right: -30px;
-    top: 48%;
-    background-color: transparent;
-    border: none;
-    font-size: 25px;
-    color: #333;
-    height: 25px;
-    width: 25px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
+  position: absolute;
+  right: 5px;
+  top: 45px;
+  background-color: transparent;
+  border: none;
+  font-size: 25px;
+  color: #333;
+  height: 25px;
+  width: 25px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
-.cell.miss {
+#exitBtn.setup {
+  right: 8px;
+  top: unset;
+  bottom: 55px;
+}
+
+#enemyField .cell.ship,
+#myField .cell.ship {
+  background-color: #555;
+  border: 2px solid #222;
+  border-radius: 4px;
+  touch-action: none;
+  cursor: grab;
+}
+
+#enemyField .cell.miss,
+#myField .cell.miss {
   background-color: red;
   pointer-events: none;
 }
 
-.cell.hit {
+#enemyField .cell.hit,
+#myField .cell.hit {
   background-color: green;
   pointer-events: none;
 }
