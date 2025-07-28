@@ -23,6 +23,10 @@ let myField = null;
 let enemyField = null;
 let currentTurn = null;
 
+const preloadedFire = [];
+const preloadedMiss = [];
+let preloadPromise = preloadAnimationFrames();
+
 // Генерим или читаем один раз уникальный playerId
 let playerId = localStorage.getItem('playerId');
 if (!playerId) {
@@ -116,31 +120,60 @@ function handleServerMessage(data) {
       break;
 
     case 'battle':
-      console.log('case battle →', data);
+
       if (!data.battle_ready) {
         showModal('Ожидаем второго игрока…');
         return;
       }
       hideModal();
-      import('./battle.js').then(mod => {
-        mod.startBattle(role, data.fleet, teardown, socket, secret_id, playerId, data.shots || []);
 
-        // получаем DOM-поля
-        myField = document.getElementById('myField');
-        enemyField = document.getElementById('enemyField');
-        currentTurn = data.turn;
+      // Запускаем предзагрузку один раз и получаем Promise
+      preloadPromise = preloadPromise || preloadAnimationFrames();
 
-        // ставим активности полей по очередности
-        if (currentTurn === role) {
-          // ваш ход — можно кликать по врагу
-          enemyField.style.pointerEvents = 'auto';
-          document.getElementById('game-title').textContent = 'Ваш ход 🎮'
-        } else {
-          // ждёшь хода соперника
-          enemyField.style.pointerEvents = 'none';
-          document.getElementById('game-title').textContent = 'Ожидание хода соперника ⏳'
-        }
+      // Ждём, пока кадры загрузятся и декодируются
+      preloadPromise.then(() => {
+        import('./battle.js').then(mod => {
+          mod.startBattle(
+            role,
+            data.fleet,
+            teardown,
+            socket,
+            secret_id,
+            playerId,
+            data.shots || []
+          );
+          // получаем DOM-поля
+          myField = document.getElementById('myField');
+          enemyField = document.getElementById('enemyField');
+          currentTurn = data.turn;
+
+          // ставим активности полей по очередности
+          if (currentTurn === role) {
+            // ваш ход — можно кликать по врагу
+            enemyField.style.pointerEvents = 'auto';
+            document.getElementById('game-title').textContent = 'Ваш ход 🎮'
+          } else {
+            // ждёшь хода соперника
+            enemyField.style.pointerEvents = 'none';
+            document.getElementById('game-title').textContent = 'Ожидание хода соперника ⏳'
+          }
+        });
+      }).catch(err => {
+        console.error('Ошибка предзагрузки кадров:', err);
+        // на всякий случай всё равно запускаем бой, чтобы не вешать игру
+        import('./battle.js').then(mod => {
+          mod.startBattle(
+            role,
+            data.fleet,
+            teardown,
+            socket,
+            secret_id,
+            playerId,
+            data.shots || []
+          );
+        });
       });
+      
       break;
 
     case 'shot_result': {
@@ -153,12 +186,12 @@ function handleServerMessage(data) {
       if (targetCell) {
 
         if (isHit) {
-          playExplosion(targetCell, 60, true);
+          playExplosion(targetCell, 60, true,  preloadedFire, preloadedMiss);
           setTimeout(() => {
             targetCell.classList.add('hit');
           }, 850);
         } else {
-          playExplosion(targetCell, 60);
+          playExplosion(targetCell, 60, false, preloadedFire, preloadedMiss);
           setTimeout(() => {
             targetCell.classList.add('miss');
           }, 450);
@@ -200,7 +233,7 @@ function handleServerMessage(data) {
       // Конец игры
       if (gameOver) {
         if (winner === role) {
-          alert('Поздравляем 🎉🎉\n, Вы победили 🏆');
+          alert('Поздравляем 🎉🎉\n Вы победили 🏆');
         } else {
           alert('К сожалению, вы проиграли ☠️');
         }
@@ -289,7 +322,6 @@ window.addEventListener('load', () => {
     console.log(`Авто-реконнект в ${savedID} как ${savedRole}`);
     openSocket(true);
   }
-  preloadAnimationFrames();
 });
 
 // Обработка кнопки "Подключение"
@@ -301,16 +333,23 @@ connectBtn.onclick = () => {
   openSocket(false);
 };
 
-// Предзагружаем кадры «огня» и «пузырей»
-function preloadAnimationFrames() {
-  const fireCount = 14;
-  const waterCount = 7;
-  for (let i = 1; i <= fireCount; i++) {
+// предзагрузка изображений
+async function preloadAnimationFrames() {
+  const firePromises = [];
+  for (let i = 1; i <= 14; i++) {
     const img = new Image();
     img.src = `images/fire${i}.png`;
+    preloadedFire.push(img);
+    firePromises.push(img.decode());
   }
-  for (let i = 1; i <= waterCount; i++) {
+  const missPromises = [];
+  for (let i = 1; i <= 7; i++) {
     const img = new Image();
     img.src = `images/miss${i}.png`;
+    preloadedMiss.push(img);
+    missPromises.push(img.decode());
   }
+  // ждём, пока все декодируются
+  await Promise.all([...firePromises, ...missPromises]);
+  console.log('Все кадры готовые к показу');
 }

@@ -152,41 +152,39 @@ export function placeSunkShip(field, coords) {
   field.appendChild(shipEl);
 }
 
-export function playExplosion(cell, frameDuration = 60, isHit) {
-  const explosion = document.createElement('div')
-  explosion.className = isHit ? 'explosion' : 'explosionUnderwater'
+export function playExplosion(cell, frameDuration = 60, isHit, preloadedFire, preloadedMiss) {
+  const frames = isHit ? preloadedFire : preloadedMiss;
+  const totalFrames = frames.length;
+
+  const explosion = document.createElement('div');
+  explosion.className = isHit ? 'explosion' : 'explosionUnderwater';
+
+  // сразу первый кадр
+  explosion.style.backgroundImage = `url("${frames[0].src}")`;
 
   // обеспечиваем относительное позиционирование контейнера
-  const prevPosition = window.getComputedStyle(cell).position
+  const prevPosition = window.getComputedStyle(cell).position;
   if (prevPosition === 'static' || !prevPosition) {
-    cell.style.position = 'relative'
+    cell.style.position = 'relative';
   }
-  cell.appendChild(explosion)
+  cell.appendChild(explosion);
 
-  const totalFrames = isHit ? 14 : 7
-  let startTime = null
-
-  // вызывается кадр за кадром, timestamp в миллисекундах
+  let startTime = null;
   function step(timestamp) {
-    if (startTime === null) {
-      startTime = timestamp
-      explosion.style.backgroundImage = isHit ? `url("images/fire1.png")` : `url("images/miss1.png")`
-    }
+    if (startTime === null) startTime = timestamp;
+    const elapsed = timestamp - startTime;
+    const idx = Math.floor(elapsed / frameDuration);
 
-    const elapsed = timestamp - startTime
-    const currentFrame = Math.floor(elapsed / frameDuration) + 1
-
-    if (currentFrame <= totalFrames) {
-      explosion.style.backgroundImage = isHit ? `url("images/fire${currentFrame}.png")` : `url("images/miss${currentFrame}.png")`
-      requestAnimationFrame(step)
+    if (idx < totalFrames) {
+      explosion.style.backgroundImage = `url("${frames[idx].src}")`;
+      requestAnimationFrame(step);
     } else {
-      explosion.remove()
-      // восстанавливаем исходный стиль, если нужно
+      explosion.remove();
       if (prevPosition === 'static' || !prevPosition) {
-        cell.style.position = ''
+        cell.style.position = '';
       }
     }
   }
 
-  requestAnimationFrame(step)
+  requestAnimationFrame(step);
 }
