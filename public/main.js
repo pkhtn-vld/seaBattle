@@ -2,6 +2,7 @@
 
 import { buildGrid, initFleetDraggables, enableGridDrop, populateFleetPanel, createGameContent } from './setup.js';
 import { disableDoubleTapZoom } from './mobileEvents.js';
+import { placeSunkShip, playExplosion } from './battle.js';
 
 disableDoubleTapZoom();
 
@@ -150,9 +151,19 @@ function handleServerMessage(data) {
       const targetCell = targetField
         .querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
       if (targetCell) {
-        targetCell.classList.add(isHit ? 'hit' : 'miss');
-      }
 
+        if (isHit) {
+          playExplosion(targetCell, 60, true);
+          setTimeout(() => {
+            targetCell.classList.add('hit');
+          }, 850);
+        } else {
+          playExplosion(targetCell, 60);
+          setTimeout(() => {
+            targetCell.classList.add('miss');
+          }, 450);
+        }
+      }
       // Если корабль утонул, обвести вокруг ВСЕ его клетки — и у стрелявшего, и у защищающегося
       if (sunk) {
         const deltas = [
@@ -163,12 +174,13 @@ function handleServerMessage(data) {
 
         // Выбираем поле, на котором рисуем «промахи вокруг»
         const ringField = (by === role) ? enemyField : myField;
+        placeSunkShip(ringField, sunk.coords);
 
         sunk.coords.forEach(({ x: sx, y: sy }) => {
           deltas.forEach(([dx, dy]) => {
             const nx = sx + dx, ny = sy + dy;
             console.log(`поля для miss \n x=${nx} y=${ny}`);
-            
+
             const cell = ringField.querySelector(`.cell[data-x="${nx}"][data-y="${ny}"]`);
             if (cell && !cell.classList.contains('hit')) {
               cell.classList.add('miss');
@@ -188,7 +200,7 @@ function handleServerMessage(data) {
       // Конец игры
       if (gameOver) {
         if (winner === role) {
-          alert('Поздравляем 🎉🎉, Вы победили 🏆');
+          alert('Поздравляем 🎉🎉\n, Вы победили 🏆');
         } else {
           alert('К сожалению, вы проиграли ☠️');
         }
@@ -277,6 +289,7 @@ window.addEventListener('load', () => {
     console.log(`Авто-реконнект в ${savedID} как ${savedRole}`);
     openSocket(true);
   }
+  preloadAnimationFrames();
 });
 
 // Обработка кнопки "Подключение"
@@ -287,3 +300,17 @@ connectBtn.onclick = () => {
   }
   openSocket(false);
 };
+
+// Предзагружаем кадры «огня» и «пузырей»
+function preloadAnimationFrames() {
+  const fireCount = 14;
+  const waterCount = 7;
+  for (let i = 1; i <= fireCount; i++) {
+    const img = new Image();
+    img.src = `images/fire${i}.png`;
+  }
+  for (let i = 1; i <= waterCount; i++) {
+    const img = new Image();
+    img.src = `images/miss${i}.png`;
+  }
+}

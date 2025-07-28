@@ -41,11 +41,11 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId, 
   wrapper.appendChild(myField);
   buildGrid(myField, 11);
 
-  // Рисуем корабли на myField
-  Object.values(fleet).flat().forEach(({ x, y }) => {
-    const cell = myField.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
-    if (cell) cell.classList.add('ship');
+  // рисуем спрайт для каждого корабля
+  Object.values(fleet).forEach(coords => {
+    placeSunkShip(myField, coords);
   });
+
 
   // Сделать поле игрока некликабельным
   myField.style.pointerEvents = 'none';
@@ -61,6 +61,7 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId, 
   // Навесим обработчики на клетки врага
   enemyField.querySelectorAll('.cell').forEach(cell => {
     cell.addEventListener('click', () => {
+      cell.classList.add('stop-events');
       const x = +cell.dataset.x;
       const y = +cell.dataset.y;
       console.log(`Выстрел по (${x}, ${y})`);
@@ -80,9 +81,10 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId, 
     const cell = targetField.querySelector(`.cell[data-x="${x}"][data-y="${y}"]`);
     if (cell) cell.classList.add(isHit ? 'hit' : 'miss');
 
+
     if (sunk) {
-      // то же, что у вас в handleServerMessage для sunk
       const ringField = (by === role) ? enemyField : myField;
+      placeSunkShip(ringField, sunk.coords);
       const deltas = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
       sunk.coords.forEach(({ x: sx, y: sy }) => {
         deltas.forEach(([dx, dy]) => {
@@ -95,4 +97,96 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId, 
       });
     }
   });
+}
+
+// Рисует мини‑корабль над полем field по массиву его координат coords.
+// coords — [{x, y}, …] в любой последовательности.
+export function placeSunkShip(field, coords) {
+  const length = coords.length;
+
+  if (!length) return;
+
+  const orientation = coords.every(c => c.x === coords[0].x)
+    ? 'vertical'
+    : 'horizontal';
+
+  // Якори по верхней/левой клетке
+  let anchor;
+  if (orientation === 'horizontal') {
+    const y = coords[0].y;
+    const minX = Math.min(...coords.map(c => c.x));
+    anchor = { x: minX, y };
+  } else {
+    const x = coords[0].x;
+    const minY = Math.min(...coords.map(c => c.y));
+    anchor = { x, y: minY };
+  }
+
+  // Получаем DOM‑ячейку‑якорь
+  const cell = field.querySelector(
+    `.cell[data-x="${anchor.x}"][data-y="${anchor.y}"]`
+  );
+  if (!cell) return;
+
+  // Смещение внутри контейнера
+  const gridRect = field.getBoundingClientRect();
+  const rect = cell.getBoundingClientRect();
+  const offsetX = rect.left - gridRect.left;
+  const offsetY = rect.top - gridRect.top;
+
+  // Решаем, какой класс использовать
+  const isEnemy = field.id === 'enemyField';
+  // — для enemyField: full-size .placed-ship
+  // — для myField: mini .placed-ship-mini
+  const cls = isEnemy ? 'placed-ship' : 'placed-ship-mini';
+
+  // Создаём спрайт
+  const shipEl = document.createElement('div');
+  shipEl.classList.add(cls);
+  shipEl.dataset.length = length;
+  shipEl.dataset.orientation = orientation;
+
+  shipEl.style.left = offsetX + 'px';
+  shipEl.style.top = offsetY + 'px';
+
+  field.appendChild(shipEl);
+}
+
+export function playExplosion(cell, frameDuration = 60, isHit) {
+  const explosion = document.createElement('div')
+  explosion.className = isHit ? 'explosion' : 'explosionUnderwater'
+
+  // обеспечиваем относительное позиционирование контейнера
+  const prevPosition = window.getComputedStyle(cell).position
+  if (prevPosition === 'static' || !prevPosition) {
+    cell.style.position = 'relative'
+  }
+  cell.appendChild(explosion)
+
+  const totalFrames = isHit ? 14 : 7
+  let startTime = null
+
+  // вызывается кадр за кадром, timestamp в миллисекундах
+  function step(timestamp) {
+    if (startTime === null) {
+      startTime = timestamp
+      explosion.style.backgroundImage = isHit ? `url("images/fire1.png")` : `url("images/miss1.png")`
+    }
+
+    const elapsed = timestamp - startTime
+    const currentFrame = Math.floor(elapsed / frameDuration) + 1
+
+    if (currentFrame <= totalFrames) {
+      explosion.style.backgroundImage = isHit ? `url("images/fire${currentFrame}.png")` : `url("images/miss${currentFrame}.png")`
+      requestAnimationFrame(step)
+    } else {
+      explosion.remove()
+      // восстанавливаем исходный стиль, если нужно
+      if (prevPosition === 'static' || !prevPosition) {
+        cell.style.position = ''
+      }
+    }
+  }
+
+  requestAnimationFrame(step)
 }

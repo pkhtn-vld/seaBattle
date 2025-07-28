@@ -27,6 +27,10 @@ h2 {
   display: none !important;
 }
 
+.stop-events {
+  pointer-events: none;
+}
+
 /* Сетка игрока */
 .grid {
   display: grid;
@@ -90,9 +94,6 @@ h2 {
 }
 
 .ship {
-  /* background-color: #555;
-  border: 2px solid #222; */
-  /* border-radius: 4px; */
   touch-action: none;
   cursor: grab;
 }
@@ -169,11 +170,6 @@ h2 {
   background-repeat: no-repeat;
   background-size: 100% 100%;
 }
-
-/* Размещение корабля на поле */
-/* #playerGrid .cell.occupied, #enemyField .cell.occupied {
-  background-color: #99c;
-} */
 
 /* Кнопки управления */
 #controls {
@@ -327,19 +323,9 @@ h2 {
 
 }
 
-@media screen and (max-width: 767px) and (orientation: portrait) {
-  /* .setup-mode {
-    align-items: end;
-  } */
-
-  /* #gameContainer {
-    position: absolute;
-    bottom: 0;
-  } */
-}
-
 #myField, #enemyField {
   margin: 0;
+  position: relative;
 }
 
 #exitBtn {
@@ -366,11 +352,12 @@ h2 {
 
 #enemyField .cell.ship,
 #myField .cell.ship {
-  background-color: #555;
-  border: 2px solid #222;
-  border-radius: 4px;
   touch-action: none;
   cursor: grab;
+}
+
+#myField .cell.ship {
+  border: none;
 }
 
 #enemyField .cell.miss,
@@ -447,4 +434,80 @@ h2 {
 .placed-ship[data-length="4"][data-orientation="vertical"] {
   width: 30px;  height: 120px;
   background-image: url(images/ship-4.png);
+}
+
+/* Класс «спрайта» для мини‑корабля */
+.placed-ship-mini {
+  position: absolute;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  z-index: 1;
+}
+
+/* Горизонтальные мини‑спрайты */
+.placed-ship-mini[data-length="1"][data-orientation="horizontal"] {
+  width:  20px; height: 20px;
+  background-image: url(images/ship-1-g.png);
+}
+.placed-ship-mini[data-length="2"][data-orientation="horizontal"] {
+  width:  40px; height: 20px;
+  background-image: url(images/ship-2-g.png);
+}
+.placed-ship-mini[data-length="3"][data-orientation="horizontal"] {
+  width:  60px; height: 20px;
+  background-image: url(images/ship-3-g.png);
+}
+.placed-ship-mini[data-length="4"][data-orientation="horizontal"] {
+  width:  80px; height: 20px;
+  background-image: url(images/ship-4-g.png);
+}
+
+/* Вертикальные мини‑спрайты */
+.placed-ship-mini[data-length="1"][data-orientation="vertical"] {
+  width: 20px; height:  20px;
+  background-image: url(images/ship-1.png);
+}
+.placed-ship-mini[data-length="2"][data-orientation="vertical"] {
+  width: 20px; height:  40px;
+  background-image: url(images/ship-2.png);
+}
+.placed-ship-mini[data-length="3"][data-orientation="vertical"] {
+  width: 20px; height:  60px;
+  background-image: url(images/ship-3.png);
+}
+.placed-ship-mini[data-length="4"][data-orientation="vertical"] {
+  width: 20px; height:  80px;
+  background-image: url(images/ship-4.png);
+}
+
+.explosion, .explosionUnderwater {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 30px;
+  height: 30px;
+  margin-left: -15px;
+  margin-top:  -15px;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  z-index: 10;
+}
+
+.explosion-mini, .explosionUnderwater-mini {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
+  margin-top:  -10px;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  z-index: 10;
 }
