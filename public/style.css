@@ -393,12 +393,13 @@ h2 {
   background-size: cover;
   pointer-events: none;
   z-index: 2;
+  opacity: .85;
 }
 
 /* Общий класс «поставленного» корабля */
 .placed-ship {
   position: absolute;
-  pointer-events: none;
+  /* pointer-events: none; */
   background-position: center;
   background-repeat: no-repeat;
   background-size: 100% 100%;

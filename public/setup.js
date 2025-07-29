@@ -2,6 +2,7 @@
 
 let currentDraggedData = null;
 let dragGhost = null;
+let lastShip = null;
 
 // pointer‑down: начинаем «таскать»
 function onPointerDown(e) {
@@ -65,17 +66,16 @@ function onPointerMove(e) {
 
 // pointer‑up/cancel: ставим корабль и убираем всё
 function onPointerUp(e) {
-  const shipEl = e.currentTarget;
-  shipEl.releasePointerCapture(e.pointerId);
 
   // установка
   const under = document.elementFromPoint(e.clientX, e.clientY);
   const cell = under && under.classList.contains('cell') && under;
+  let placedSuccessfully = false;
   if (cell && currentDraggedData) {
     const x = +cell.dataset.x;
     const y = +cell.dataset.y - 2;
     if (y >= 0) {
-      placeShipOnGrid(
+      placedSuccessfully = placeShipOnGrid(
         currentDraggedData.length,
         x, y,
         currentDraggedData.id,
@@ -84,10 +84,28 @@ function onPointerUp(e) {
     }
   }
 
+  // Если это перемещение и размещение успешно — удаляем старый элемент
+  if (currentDraggedData?.isRelocating) {
+    if (placedSuccessfully) {
+      currentDraggedData.oldEl.remove();
+    } else {
+      // Восстанавливаем старое положение, если не удалось разместить
+      currentDraggedData.oldEl.style.display = '';
+      currentDraggedData.oldCells.forEach(c => {
+        c.classList.add('occupied');
+        c.dataset.shipId = currentDraggedData.id;
+        
+        lastShip.style.opacity = '1';
+        lastShip.style.pointerEvents = 'all';
+
+      });
+    }
+  }
+
   // снятие слушателей
-  shipEl.removeEventListener('pointermove', onPointerMove);
-  shipEl.removeEventListener('pointerup', onPointerUp);
-  shipEl.removeEventListener('pointercancel', onPointerUp);
+  document.removeEventListener('pointermove', onPointerMove);
+  document.removeEventListener('pointerup', onPointerUp);
+  document.removeEventListener('pointercancel', onPointerUp);
 
   // чистка
   clearPreview();
@@ -102,6 +120,7 @@ const createGhostMover = () => {
   let length = null;
 
   return function moveGhost(cx, cy, newOrientation, newLength) {
+    if (!dragGhost) return;
     if (newOrientation) orientation = newOrientation;
     if (newLength) length = newLength;
 
@@ -156,7 +175,7 @@ export function populateFleetPanel(orientation) {
       ship.className = "ship";
       ship.dataset.length = len;
       ship.dataset.orientation = orientation ? orientation : 'horizontal';
-      
+
       if (ship?.dataset?.orientation) {
         const isVertical = ship.dataset.orientation === 'vertical';
         ship.classList.toggle('vertical', isVertical);
@@ -230,37 +249,13 @@ function clearPreview() {
     .forEach(c => c.classList.remove('preview-ok', 'preview-bad'));
 }
 
-// Размещает корабль и помечает ячейки
-// function placeShipOnGrid(length, x, y, shipId, orientation) {
-//   const cells = [];
-//   for (let i = 0; i < length; i++) {
-//     const tx = orientation === 'horizontal' ? x + i : x;
-//     const ty = orientation === 'vertical' ? y - i : y; // снизу вверх
-
-//     const selector = `.cell[data-x="${tx}"][data-y="${ty}"]`;
-//     const cell = document.querySelector(selector);
-//     if (!cell || !cellIsFreeWithBuffer(cell)) return false;
-//     cells.push(cell);
-//   }
-
-//   cells.forEach(cell => {
-//     cell.classList.add('occupied');
-//     cell.dataset.shipId = shipId;
-//   });
-
-//   // Удаляем исходный элемент корабля из панели
-//   const shipEl = document.querySelector(`.ship[data-id="${shipId}"]`);
-//   if (shipEl) shipEl.remove();
-//   return true;
-// }
-
 function placeShipOnGrid(length, x, y, shipId, orientation) {
   // проверяем свободность (ваша логика)
   const cells = [];
   for (let i = 0; i < length; i++) {
     const tx = orientation === 'horizontal' ? x + i : x;
-    const ty = orientation === 'vertical'   ? y - i : y;
-    const c  = document.querySelector(`.cell[data-x="${tx}"][data-y="${ty}"]`);
+    const ty = orientation === 'vertical' ? y - i : y;
+    const c = document.querySelector(`.cell[data-x="${tx}"][data-y="${ty}"]`);
     if (!c || !cellIsFreeWithBuffer(c)) return false;
     cells.push(c);
   }
@@ -281,30 +276,84 @@ function placeShipOnGrid(length, x, y, shipId, orientation) {
   // создаём единый <div class="placed-ship">
   const shipEl = document.createElement('div');
   shipEl.classList.add('placed-ship');
-  shipEl.dataset.length      = length;
+  shipEl.dataset.length = length;
   shipEl.dataset.orientation = orientation;
-  shipEl.dataset.shipId      = shipId;
+  shipEl.dataset.shipId = shipId;
 
   // вычисляем оффсет внутри grid’а
   const gridRect = document.getElementById('playerGrid').getBoundingClientRect();
-  const rect     = anchorCell.getBoundingClientRect();
-  const offsetX  = rect.left - gridRect.left;
-  const offsetY  = rect.top  - gridRect.top;
+  const rect = anchorCell.getBoundingClientRect();
+  const offsetX = rect.left - gridRect.left;
+  const offsetY = rect.top - gridRect.top;
 
   shipEl.style.left = offsetX + 'px';
-  shipEl.style.top  = offsetY + 'px';
+  shipEl.style.top = offsetY + 'px';
 
   // рисуем спрайт и удаляем «сырой» элемент из панели
   document.getElementById('playerGrid').appendChild(shipEl);
   const orig = document.querySelector(`.ship[data-id="${shipId}"]`);
   if (orig) orig.remove();
 
+  // Инициализируем перетаскивание для этого размещенного корабля
+  initPlacedShipDragging(shipEl);
+
   return true;
 }
 
+// Инициализация перетаскивания для размещенных кораблей
+function initPlacedShipDragging(shipEl) {
+  shipEl.style.touchAction = 'none';
+  shipEl.addEventListener('pointerdown', onPlacedPointerDown);
+}
+
+// pointer-down для размещенных кораблей (аналог onPointerDown, но с очисткой и восстановлением)
+function onPlacedPointerDown(e) {
+  const shipEl = e.currentTarget;
+  e.preventDefault();
+  shipEl.setPointerCapture(e.pointerId);
+
+  // Читаем параметры
+  const length = +shipEl.dataset.length;
+  const orientation = shipEl.dataset.orientation;
+  const id = shipEl.dataset.shipId;
+
+  // Сохраняем старые клетки для возможного восстановления
+  const oldCells = Array.from(document.querySelectorAll(`.cell[data-ship-id="${id}"]`));
+
+  // Временно очищаем клетки (чтобы проверка свободности работала корректно во время drag)
+  oldCells.forEach(c => {
+    c.classList.remove('occupied');
+    delete c.dataset.shipId;
+  });
+
+  // Временно скрываем старый элемент
+  shipEl.style.opacity = '0';
+  shipEl.style.pointerEvents = 'none';
+
+  lastShip = shipEl;
+
+  // Устанавливаем данные для drag (с флагом перемещения)
+  currentDraggedData = { length, id, orientation, isRelocating: true, oldEl: shipEl, oldCells };
+
+  // Создаём ghost
+  dragGhost = shipEl.cloneNode(true);
+  dragGhost.classList.add('dragging', 'ship'); // Добавляем 'ship' для стилей, если нужно
+  dragGhost.style.position = 'fixed';
+  dragGhost.style.opacity = '0.2';
+  dragGhost.style.pointerEvents = 'none';
+  document.body.appendChild(dragGhost);
+
+  dragGhost.classList.add('preview-ghost');
+
+  // Позиционируем ghost
+  moveGhost(e.clientX, e.clientY, orientation, length);
+
+  document.addEventListener('pointermove', onPointerMove);
+  document.addEventListener('pointerup', onPointerUp);
+  document.addEventListener('pointercancel', onPointerUp);
+}
 // Случайное размещение оставшихся кораблей (с учётом буфера)
 function randomizeFleetPlacement() {
-  const grid = document.getElementById('playerGrid');
   const fleetPanel = document.getElementById('fleetPanel');
   const ships = Array.from(fleetPanel.querySelectorAll('.ship'));
   ships.forEach(shipEl => {
@@ -469,7 +518,7 @@ export function createGameContent(socket, role, secret_id, playerId, showModal, 
   controls.appendChild(resetBtn);
   controls.appendChild(randomBtn);
 
-    // Создаём кнопку выхода
+  // Создаём кнопку выхода
   const exitBtn = document.createElement('button');
   exitBtn.id = 'exitBtn';
   exitBtn.title = 'Вернуться к выбору комнаты';
