@@ -4,8 +4,25 @@ let currentDraggedData = null;
 let dragGhost = null;
 let lastShip = null;
 
+function disablePlacedPointerEvents() {
+  const grid = document.getElementById('playerGrid');
+  grid.classList.add('drag-mode');
+  document.querySelectorAll('.placed-ship').forEach(el => {
+    el.style.pointerEvents = 'none';
+  });
+}
+
+function enablePlacedPointerEvents() {
+  const grid = document.getElementById('playerGrid');
+  grid.classList.remove('drag-mode');
+  document.querySelectorAll('.placed-ship').forEach(el => {
+    el.style.pointerEvents = 'auto';
+  });
+}
+
 // pointer‑down: начинаем «таскать»
 function onPointerDown(e) {
+  disablePlacedPointerEvents();
   const shipEl = e.currentTarget;
   e.preventDefault();
   shipEl.setPointerCapture(e.pointerId);
@@ -36,6 +53,7 @@ function onPointerDown(e) {
 
 // pointer‑move: двигаем ghost и рисуем превью
 function onPointerMove(e) {
+  disablePlacedPointerEvents();
   e.preventDefault();
   moveGhost(e.clientX, e.clientY);
 
@@ -112,6 +130,8 @@ function onPointerUp(e) {
   if (dragGhost) document.body.removeChild(dragGhost);
   dragGhost = null;
   currentDraggedData = null;
+  
+  enablePlacedPointerEvents();
 }
 
 // helper: позиционирование ghost рядом с пальцем
@@ -250,7 +270,6 @@ function clearPreview() {
 }
 
 function placeShipOnGrid(length, x, y, shipId, orientation) {
-  // проверяем свободность (ваша логика)
   const cells = [];
   for (let i = 0; i < length; i++) {
     const tx = orientation === 'horizontal' ? x + i : x;
@@ -421,7 +440,6 @@ function rotateFleetShips() {
     ship.classList.toggle('vertical');
   });
 }
-
 
 // Обработчка кнопки сброса
 function resetGame() {
