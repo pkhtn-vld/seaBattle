@@ -77,8 +77,6 @@ function showReloadModal() {
   modal.classList.remove('hidden');
   connectionPanel.classList.add('hidden');
   gameContainer.classList.add('hidden');
-
-  document.body.classList.remove('setup-mode');
 }
 
 
@@ -173,7 +171,7 @@ function handleServerMessage(data) {
           );
         });
       });
-      
+
       break;
 
     case 'shot_result': {
@@ -186,7 +184,7 @@ function handleServerMessage(data) {
       if (targetCell) {
 
         if (isHit) {
-          playExplosion(targetCell, 60, true,  preloadedFire, preloadedMiss);
+          playExplosion(targetCell, 60, true, preloadedFire, preloadedMiss);
           setTimeout(() => {
             targetCell.classList.add('hit');
           }, 850);
@@ -232,13 +230,92 @@ function handleServerMessage(data) {
 
       // Конец игры
       if (gameOver) {
+        selfDisconnect = true;
         if (winner === role) {
-          alert('Поздравляем 🎉🎉\n Вы победили 🏆');
+          setTimeout(() => {
+            // скрываем игровой контейнер
+            gameContainer.classList.add('hidden');
+            document.body.style.backgroundColor = 'rgb(249, 188, 112)';
+
+            // создаём and вставляем winLayer + дети
+            const winLayer = document.createElement('div');
+            winLayer.className = 'win-layer';
+            const gunLeft = Object.assign(document.createElement('div'), { className: 'gun-left' });
+            const gunRight = Object.assign(document.createElement('div'), { className: 'gun-right' });
+            const gold = Object.assign(document.createElement('div'), { className: 'gold' });
+            const win = Object.assign(document.createElement('div'), { className: 'win-banner' });
+            winLayer.append(gunLeft, gunRight, gold, win);
+            document.body.appendChild(winLayer);
+
+            // Создаём кнопку выхода
+            const exitBtn = document.createElement('button');
+            exitBtn.id = 'exitBtn';
+            exitBtn.title = 'Вернуться к выбору комнаты';
+            exitBtn.textContent = '↩';
+            exitBtn.classList.add('exitBtn-end');
+            document.body.append(exitBtn);
+
+            const fireworks = new Fireworks.default(winLayer)
+
+            // Обработка кнопки "Выход"
+            exitBtn.onclick = () => {
+              winLayer.remove();
+              fireworks.stop();
+              exitBtn.remove();
+              teardown();
+            };
+
+            // анимации показа
+            setTimeout(() => gunLeft.classList.add('show', 'slide-in-left'), 500);
+            setTimeout(() => gunRight.classList.add('show', 'slide-in-right'), 1500);
+            setTimeout(() => gold.classList.add('show'), 2500);
+            setTimeout(() => {
+              win.classList.add('show', 'slide-down');
+              fireworks.start(); // запуск фейерверка
+            }, 2000);
+
+            setTimeout(() => { exitBtn.classList.add('show'); }, 3000);
+
+          }, 850);
+
         } else {
-          alert('К сожалению, вы проиграли ☠️');
+          // скрываем игровой контейнер
+          gameContainer.classList.add('hidden');
+          document.body.style.backgroundColor = 'rgb(32, 60, 81)';
+
+          // создаём and вставляем loseLayer + дети
+          const loseLayer = document.createElement('div');
+          loseLayer.className = 'lose-layer';
+          const lose = Object.assign(document.createElement('div'), { className: 'lose-banner' });
+          loseLayer.append(lose);
+          document.body.appendChild(loseLayer);
+
+          // Создаём кнопку выхода
+          const exitBtn = document.createElement('button');
+          exitBtn.id = 'exitBtn';
+          exitBtn.title = 'Вернуться к выбору комнаты';
+          exitBtn.textContent = '↩';
+          exitBtn.classList.add('exitBtn-end');
+          document.body.append(exitBtn);
+
+          // Обработка кнопки "Выход"
+          exitBtn.onclick = () => {
+            loseLayer.remove();
+            exitBtn.remove();
+            teardown();
+          };
+
+          // анимации показа
+          setTimeout(() => {
+            lose.classList.add('show');
+          }, 200);
+
+          setTimeout(() => {
+            exitBtn.classList.add('show');
+          }, 1000);
         }
-        teardown();
       }
+
       break;
     }
 
@@ -259,8 +336,6 @@ function showModal(text) {
   modal.classList.remove('hidden');
   connectionPanel.classList.add('hidden');
   gameContainer.classList.add('hidden');
-
-  document.body.classList.remove('setup-mode');
 }
 
 function hideModal() {
@@ -273,7 +348,6 @@ function showGame() {
   if (container) container.innerHTML = '';
   createGameContent(socket, role, secret_id, playerId, showModal, teardown);
 
-  document.body.classList.add('setup-mode');
   hideModal();
   connectionPanel.classList.add('hidden');
   gameContainer.classList.remove('hidden');
@@ -303,7 +377,7 @@ function teardown() {
   hideModal();
   connectionPanel.classList.remove('hidden');
   gameContainer.classList.add('hidden');
-  document.body.classList.remove('setup-mode');
+  document.body.style.backgroundColor = '#f0f4f7';
 }
 
 // Отмена из модалки
