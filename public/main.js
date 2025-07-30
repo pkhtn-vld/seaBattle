@@ -36,7 +36,8 @@ if (!playerId) {
 
 // Открытие сокета и установка обработчиков
 function openSocket(isReconnect = false) {
-  socket = new WebSocket('ws://192.168.0.208:3012');
+  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
+  socket = new WebSocket(`${protocol}://${location.hostname}:3012`);
   console.log('Открытие WebSocket…');
 
   socket.onopen = () => {
