@@ -8,7 +8,8 @@ import path from 'path';
 import { send } from './utils.js';
 
 // Настройки
-const PORT = 3012;
+// const PORT = 3012;
+const PORT = process.env.PORT || 3000;
 const GAMES_FOLDER = path.join('./server/games');
 
 // Хранилище сессий в памяти
