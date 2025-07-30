@@ -88,6 +88,65 @@ function onPointerUp(e) {
   // установка
   const under = document.elementFromPoint(e.clientX, e.clientY);
   const cell = under && under.classList.contains('cell') && under;
+
+  const fleetPanel = document.getElementById('fleetPanel');
+  const droppedOnPanel = fleetPanel.contains(under);
+
+  // Если кинул на панель – возвращаем корабль
+  if (droppedOnPanel && currentDraggedData) {
+    const { length, id, originalIndex } = currentDraggedData;
+    // узнаём актуальную ориентацию всей панели
+    const panelOri = fleetPanel.firstElementChild?.dataset.orientation || 'horizontal';
+
+    // создаём новый .ship
+    const ship = document.createElement('div');
+    ship.className = 'ship';
+    ship.dataset.length = length;
+    ship.dataset.orientation = panelOri;
+    ship.dataset.id = id;
+    ship.dataset.originalIndex = originalIndex;
+    ship.classList.toggle('vertical', panelOri === 'vertical');
+    ship.classList.toggle('horizontal', panelOri === 'horizontal');
+
+    // вставляем в панель именно на своё место по originalIndex
+    const sibs = Array.from(fleetPanel.children);
+    let inserted = false;
+    for (let sib of sibs) {
+      if (+sib.dataset.originalIndex > originalIndex) {
+        fleetPanel.insertBefore(ship, sib);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) fleetPanel.appendChild(ship);
+
+    // восстановим панели драг
+    initFleetDraggables(fleetPanel);
+
+    // очистим клетки старого размещения
+    if (currentDraggedData.oldCells) {
+      currentDraggedData.oldCells.forEach(c => {
+        c.classList.remove('occupied');
+        delete c.dataset.shipId;
+      });
+    }
+    // уберём старый спрайт
+    if (currentDraggedData.oldEl) {
+      currentDraggedData.oldEl.remove();
+    }
+
+    // финальная очистка и выход
+    clearPreview();
+    if (dragGhost) document.body.removeChild(dragGhost);
+    dragGhost = null;
+    currentDraggedData = null;
+    enablePlacedPointerEvents();
+
+    reorderFleetPanel();
+    return;
+  }
+
+  // Иначе — обычная попытка поставить на поле ---
   let placedSuccessfully = false;
   if (cell && currentDraggedData) {
     const x = +cell.dataset.x;
@@ -112,11 +171,10 @@ function onPointerUp(e) {
       currentDraggedData.oldCells.forEach(c => {
         c.classList.add('occupied');
         c.dataset.shipId = currentDraggedData.id;
-        
-        lastShip.style.opacity = '1';
-        lastShip.style.pointerEvents = 'all';
 
       });
+      lastShip.style.opacity = '1';
+      lastShip.style.pointerEvents = 'all';
     }
   }
 
@@ -125,13 +183,20 @@ function onPointerUp(e) {
   document.removeEventListener('pointerup', onPointerUp);
   document.removeEventListener('pointercancel', onPointerUp);
 
-  // чистка
+  enablePlacedPointerEvents();
   clearPreview();
   if (dragGhost) document.body.removeChild(dragGhost);
   dragGhost = null;
   currentDraggedData = null;
-  
-  enablePlacedPointerEvents();
+  reorderFleetPanel();
+}
+
+// вспомогательная функция: сортировка флота внутри #fleetPanel по убыванию длины
+function reorderFleetPanel() {
+  const panel = document.getElementById('fleetPanel');
+  Array.from(panel.children)
+    .sort((a, b) => +b.dataset.length - +a.dataset.length)
+    .forEach(ship => panel.appendChild(ship));
 }
 
 // helper: позиционирование ghost рядом с пальцем
@@ -190,11 +255,12 @@ export function populateFleetPanel(orientation) {
   const fleetPanel = document.getElementById("fleetPanel");
   if (fleetPanel) {
     fleetPanel.innerHTML = '';
-    [4, 3, 3, 2, 2, 2, 1, 1, 1, 1].forEach(len => {
+    [4, 3, 3, 2, 2, 2, 1, 1, 1, 1].forEach((len, idx) => {
       const ship = document.createElement("div");
       ship.className = "ship";
       ship.dataset.length = len;
       ship.dataset.orientation = orientation ? orientation : 'horizontal';
+      ship.dataset.originalIndex = idx;
 
       if (ship?.dataset?.orientation) {
         const isVertical = ship.dataset.orientation === 'vertical';
