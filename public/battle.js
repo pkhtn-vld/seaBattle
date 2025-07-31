@@ -160,31 +160,40 @@ export function playExplosion(cell, frameDuration = 60, isHit, preloadedFire, pr
   const frames = isHit ? preloadedFire : preloadedMiss;
   const totalFrames = frames.length;
 
-  const explosion = document.createElement('div');
-  explosion.className = isHit ? 'explosion' : 'explosionUnderwater';
+  // Создаём canvas того же размера, что и кадр
+  const cw = frames[0].naturalWidth;
+  const ch = frames[0].naturalHeight;
+  const canvas = document.createElement('canvas');
+  canvas.width = cw;
+  canvas.height = ch;
+  canvas.className = 'explosion-canvas';       // для стилей (position/названия)
 
-  // сразу первый кадр
-  explosion.style.backgroundImage = `url("${frames[0].src}")`;
-
-  // обеспечиваем относительное позиционирование контейнера
-  const prevPosition = window.getComputedStyle(cell).position;
-  if (prevPosition === 'static' || !prevPosition) {
+  // Относительное позиционирование контейнера
+  const prevPos = getComputedStyle(cell).position;
+  if (prevPos === 'static' || !prevPos) {
     cell.style.position = 'relative';
+    canvas.dataset.resetPos = 'true';
   }
-  cell.appendChild(explosion);
+  cell.appendChild(canvas);
 
+  const ctx = canvas.getContext('2d');
   let startTime = null;
-  function step(timestamp) {
-    if (startTime === null) startTime = timestamp;
-    const elapsed = timestamp - startTime;
-    const idx = Math.floor(elapsed / frameDuration);
 
-    if (idx < totalFrames) {
-      explosion.style.backgroundImage = `url("${frames[idx].src}")`;
+  function step(ts) {
+    if (!startTime) startTime = ts;
+    const elapsed = ts - startTime;
+    const idx = Math.min(Math.floor(elapsed / frameDuration), totalFrames - 1);
+
+    // Рисуем текущий кадр
+    ctx.clearRect(0, 0, cw, ch);
+    ctx.drawImage(frames[idx], 0, 0);
+
+    if (idx < totalFrames - 1) {
       requestAnimationFrame(step);
     } else {
-      explosion.remove();
-      if (prevPosition === 'static' || !prevPosition) {
+      // Конец анимации
+      canvas.remove();
+      if (canvas.dataset.resetPos) {
         cell.style.position = '';
       }
     }
