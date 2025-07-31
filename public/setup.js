@@ -558,9 +558,9 @@ export function createGameContent(socket, role, secret_id, playerId, showModal, 
   gameContainer.innerHTML = '';
 
   // Заголовок
-  const title = document.createElement('h2');
-  title.textContent = 'Разместите свои корабли';
-  gameContainer.appendChild(title);
+  // const title = document.createElement('h2');
+  // title.textContent = 'Разместите свои корабли';
+  // gameContainer.appendChild(title);
 
   // Центральная область
   const middle = document.createElement('div');
@@ -583,30 +583,25 @@ export function createGameContent(socket, role, secret_id, playerId, showModal, 
 
   const rotateBtn = document.createElement('button');
   rotateBtn.id = 'rotateBtn';
-  rotateBtn.textContent = 'Повернуть';
 
   const readyBtn = document.createElement('button');
   readyBtn.id = 'readyBtn';
-  readyBtn.textContent = 'Готов';
 
   const resetBtn = document.createElement('button');
   resetBtn.id = 'resetBtn';
-  resetBtn.textContent = 'Сброс';
 
   const randomBtn = document.createElement('button');
   randomBtn.id = 'randomBtn';
-  randomBtn.textContent = '🎲';
 
   controls.appendChild(rotateBtn);
-  controls.appendChild(readyBtn);
   controls.appendChild(resetBtn);
+  controls.appendChild(readyBtn);
   controls.appendChild(randomBtn);
 
   // Создаём кнопку выхода
   const exitBtn = document.createElement('button');
   exitBtn.id = 'exitBtn';
   exitBtn.title = 'Вернуться к выбору комнаты';
-  exitBtn.textContent = '↩';
   exitBtn.classList.add('setup');
   controls.appendChild(exitBtn);
 
@@ -642,7 +637,7 @@ export function createGameContent(socket, role, secret_id, playerId, showModal, 
     // проверяем что все корабли установлены
     const fleetPanel = document.getElementById('fleetPanel');
     if (fleetPanel.children.length > 0) {
-      alert('Пожалуйста, расставьте все корабли на поле');
+      alert('Необходимо расставить все корабли на поле');
       return;
     }
 

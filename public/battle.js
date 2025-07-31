@@ -3,6 +3,7 @@ import { buildGrid } from './setup.js';
 
 export function startBattle(role, fleet, teardown, socket, secret_id, playerId, shots = []) {
   console.log('startBattle()', role);
+  document.body.classList.add('in-game');
 
   const container = document.getElementById('gameContainer');
   container.classList.remove('hidden');
@@ -26,8 +27,12 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId, 
   const exitBtn = document.createElement('button');
   exitBtn.id = 'exitBtn';
   exitBtn.title = 'Вернуться к выбору комнаты';
-  exitBtn.textContent = '↩';
   wrapper.appendChild(exitBtn);
+
+  // make utochka
+  const duckDiv = document.createElement('div');
+  duckDiv.id = 'duck-container';
+  wrapper.appendChild(duckDiv);
 
   // Обработка кнопки "Выход"
   exitBtn.onclick = () => {
@@ -49,7 +54,6 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId, 
 
   // Сделать поле игрока некликабельным
   myField.style.pointerEvents = 'none';
-  myField.style.opacity = '0.8';
 
   // Поле противника
   const enemyField = document.createElement('div');

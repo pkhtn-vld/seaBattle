@@ -155,11 +155,11 @@ function handleServerMessage(data) {
           if (currentTurn === role) {
             // ваш ход — можно кликать по врагу
             enemyField.style.pointerEvents = 'auto';
-            document.getElementById('game-title').textContent = 'Ваш ход 🎮'
+            document.getElementById('game-title').textContent = 'Ваш ход'
           } else {
             // ждёшь хода соперника
             enemyField.style.pointerEvents = 'none';
-            document.getElementById('game-title').textContent = 'Ожидание хода соперника ⏳'
+            document.getElementById('game-title').textContent = 'Ожидание хода соперника'
           }
         });
       }).catch(err => {
@@ -231,7 +231,7 @@ function handleServerMessage(data) {
       if (!gameOver) {
         const myTurn = (currentTurn === role);
         enemyField.style.pointerEvents = myTurn ? 'auto' : 'none';
-        document.getElementById('game-title').textContent = myTurn ? 'Ваш ход 🎮' : 'Ожидание хода соперника ⏳';
+        document.getElementById('game-title').textContent = myTurn ? 'Ваш ход' : 'Ожидание хода соперника';
       }
 
       // Конец игры
@@ -241,6 +241,7 @@ function handleServerMessage(data) {
           setTimeout(() => {
             // скрываем игровой контейнер
             gameContainer.classList.add('hidden');
+            document.body.classList.remove('in-game');
             document.body.style.backgroundColor = 'rgb(249, 188, 112)';
 
             // создаём and вставляем winLayer + дети
@@ -287,6 +288,7 @@ function handleServerMessage(data) {
         } else {
           // скрываем игровой контейнер
           gameContainer.classList.add('hidden');
+          document.body.classList.remove('in-game');
           document.body.style.backgroundColor = 'rgb(32, 60, 81)';
 
           // создаём and вставляем loseLayer + дети
@@ -342,6 +344,7 @@ function showModal(text) {
   modal.classList.remove('hidden');
   connectionPanel.classList.add('hidden');
   gameContainer.classList.add('hidden');
+  document.body.classList.remove('in-game');
 }
 
 function hideModal() {
@@ -350,6 +353,7 @@ function hideModal() {
 }
 
 function showGame() {
+  document.body.classList.add('in-game');
   const container = document.getElementById('gameContainer');
   if (container) container.innerHTML = '';
   createGameContent(socket, role, secret_id, playerId, showModal, teardown);
