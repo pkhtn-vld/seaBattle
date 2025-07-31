@@ -27,6 +27,8 @@ const preloadedFire = [];
 const preloadedMiss = [];
 let preloadPromise = preloadAnimationFrames();
 
+document.body.classList.add('in-game');
+
 // Генерим или читаем один раз уникальный playerId
 let playerId = localStorage.getItem('playerId');
 if (!playerId) {
@@ -327,6 +329,13 @@ function handleServerMessage(data) {
       break;
     }
 
+    case 'chat':
+      const { from, text } = data;
+      if (from !== role) {
+        alert(text);
+      } 
+      break;
+
     case 'error':
       alert(data.message || 'Неизвестная ошибка');
       teardown();
@@ -344,7 +353,7 @@ function showModal(text) {
   modal.classList.remove('hidden');
   connectionPanel.classList.add('hidden');
   gameContainer.classList.add('hidden');
-  document.body.classList.remove('in-game');
+  // document.body.classList.remove('in-game');
 }
 
 function hideModal() {
@@ -387,7 +396,7 @@ function teardown() {
   hideModal();
   connectionPanel.classList.remove('hidden');
   gameContainer.classList.add('hidden');
-  document.body.style.backgroundColor = '#f0f4f7';
+  document.body.classList.add('in-game');
 }
 
 // Отмена из модалки

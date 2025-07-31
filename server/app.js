@@ -278,6 +278,28 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      case 'chat': {
+        const { text } = data;
+        if (typeof text !== 'string' || !ws.secret_id) return;
+        const session = sessions[ws.secret_id];
+        if (!session) return;
+
+        const payload = {
+          type: 'chat',
+          from: ws.role,
+          text: text.slice(0, 500) // обрезаем слишком длинные сообщения
+        };
+
+        // Рассылаем обоим (если подключены)
+        ['player1', 'player2'].forEach(roleKey => {
+          const sock = session.sockets[roleKey];
+          if (sock && sock.readyState === sock.OPEN) {
+            sock.send(JSON.stringify(payload));
+          }
+        });
+        return;
+      }
+
       default:
         ws.send(JSON.stringify({ type: 'error', message: 'Неизвестный тип' }));
         return;

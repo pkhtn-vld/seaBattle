@@ -55,7 +55,6 @@ h2 {
   width: 30px;
   height: 30px;
   background-color: #b8d1dd;
-  border: 1px solid #b8d1dd;
   box-sizing: border-box;
   position: relative;
   overflow: hidden;
@@ -69,7 +68,6 @@ h2 {
   width: 20px;
   height: 20px;
   background-color: #b8d1dd;
-  border: 1px solid #b8d1dd;
   box-sizing: border-box;
   position: relative;
   overflow: hidden;
