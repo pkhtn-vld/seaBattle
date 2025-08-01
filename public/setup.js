@@ -95,6 +95,13 @@ function onPointerUp(e) {
   // Если кинул на панель – возвращаем корабль
   if (droppedOnPanel && currentDraggedData) {
     const { length, id, originalIndex } = currentDraggedData;
+
+    // Если корабль с таким id уже есть в панели, выходим без изменений
+    if (fleetPanel.querySelector(`.ship[data-id="${id}"]`)) {
+      cleanupDrag();
+      return;
+    }
+
     // узнаём актуальную ориентацию всей панели
     const panelOri = fleetPanel.firstElementChild?.dataset.orientation || 'horizontal';
 
@@ -189,6 +196,15 @@ function onPointerUp(e) {
   dragGhost = null;
   currentDraggedData = null;
   reorderFleetPanel();
+}
+
+// код для очистки состояния
+function cleanupDrag() {
+  clearPreview();
+  if (dragGhost) document.body.removeChild(dragGhost);
+  dragGhost = null;
+  currentDraggedData = null;
+  enablePlacedPointerEvents();
 }
 
 // вспомогательная функция: сортировка флота внутри #fleetPanel по убыванию длины
