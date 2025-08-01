@@ -3,6 +3,7 @@
 import { buildGrid, initFleetDraggables, enableGridDrop, populateFleetPanel, createGameContent } from './setup.js';
 import { disableDoubleTapZoom } from './mobileEvents.js';
 import { placeSunkShip, playExplosion } from './battle.js';
+import { preloadAll  } from './preload.js';
 
 disableDoubleTapZoom();
 
@@ -23,9 +24,16 @@ let myField = null;
 let enemyField = null;
 let currentTurn = null;
 
-const preloadedFire = [];
-const preloadedMiss = [];
-let preloadPromise = preloadAnimationFrames();
+// предзагрузка изображений
+let preloadedFire = [];
+let preloadedMiss = [];
+let preloadPromise = preloadAll()
+  .then(({ fireFrames, missFrames }) => {
+    console.log('Предзагружено всё! ', fireFrames.length, ' fire-кадров и ', missFrames.length, ' miss-кадров');
+    preloadedFire = fireFrames;
+    preloadedMiss = missFrames;
+  })
+  .catch(err => console.error('Ошибка при предзагрузке:', err));
 
 document.body.classList.add('in-game');
 
@@ -44,7 +52,6 @@ function openSocket(isReconnect = false) {
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
   socket = new WebSocket(`${protocol}://${location.host}`);
 
-  console.log('Открытие WebSocket…');
   console.log('Открытие WebSocket…');
 
   socket.onopen = () => {
@@ -132,9 +139,6 @@ function handleServerMessage(data) {
         return;
       }
       hideModal();
-
-      // Запускаем предзагрузку один раз и получаем Promise
-      preloadPromise = preloadPromise || preloadAnimationFrames();
 
       // Ждём, пока кадры загрузятся и декодируются
       preloadPromise.then(() => {
@@ -425,24 +429,3 @@ connectBtn.onclick = () => {
   }
   openSocket(false);
 };
-
-// предзагрузка изображений
-async function preloadAnimationFrames() {
-  const firePromises = [];
-  for (let i = 1; i <= 14; i++) {
-    const img = new Image();
-    img.src = `images/fire${i}.png`;
-    preloadedFire.push(img);
-    firePromises.push(img.decode());
-  }
-  const missPromises = [];
-  for (let i = 1; i <= 7; i++) {
-    const img = new Image();
-    img.src = `images/miss${i}.png`;
-    preloadedMiss.push(img);
-    missPromises.push(img.decode());
-  }
-  // ждём, пока все декодируются
-  await Promise.all([...firePromises, ...missPromises]);
-  console.log('Все кадры готовые к показу');
-}

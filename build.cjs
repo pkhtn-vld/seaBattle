@@ -89,4 +89,9 @@ function obfuscateDirJS(dirPath) {
   fs.copyFileSync(path.join(__dirname, 'package-lock.json'), path.join(distPath, 'package-lock.json'));
 
   console.log('📦 Скопированы package.json и package-lock.json');
+
+  // Копируем manifest.json
+  fs.copyFileSync( path.join(__dirname, 'public', 'manifest.json'), path.join(distPath, 'public', 'manifest.json') );
+
+  console.log('📦 Скопирован manifest.json');
 })();
