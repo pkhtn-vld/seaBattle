@@ -101,10 +101,10 @@ wss.on('connection', (ws) => {
             session.playerIds.player2 = playerId;
           } else {
             // оба слота заняты — честно говорим, что комната полна
-            ws.send(JSON.stringify({
-              type: 'error',
-              message: 'Комната уже заполнена двумя игроками'
-            }));
+            // ws.send(JSON.stringify({
+            //   type: 'error',
+            //   message: 'Комната уже заполнена двумя игроками'
+            // }));
             return;
           }
         }
@@ -140,10 +140,10 @@ wss.on('connection', (ws) => {
         // Проверяем, что прислан clientRole валиден и совпадает с сохранённым playerId
         if (!['player1', 'player2'].includes(clientRole) ||
           session.playerIds[clientRole] !== playerId) {
-          ws.send(JSON.stringify({
-            type: 'error',
-            message: 'Невозможный reconnect: неверная роль или playerId'
-          }));
+          // ws.send(JSON.stringify({
+          //   type: 'error',
+          //   message: 'Невозможный reconnect: неверная роль или playerId'
+          // }));
           return;
         }
 
@@ -230,7 +230,8 @@ wss.on('connection', (ws) => {
 
         // Проверка очереди
         if (bd.turn !== ws.role) {
-          return send(ws, { type: 'error', message: 'Сейчас не ваш ход' });
+          // return send(ws, { type: 'error', message: 'Сейчас не ваш ход' });
+          return;
         }
 
         // Определяем противника

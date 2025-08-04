@@ -2,8 +2,8 @@
 
 import { buildGrid, initFleetDraggables, enableGridDrop, populateFleetPanel, createGameContent } from './setup.js';
 import { disableDoubleTapZoom } from './mobileEvents.js';
-import { placeSunkShip, playExplosion } from './battle.js';
-import { preloadAll  } from './preload.js';
+import { placeSunkShip, playExplosion, updateShipPanel } from './battle.js';
+import { preloadAll } from './preload.js';
 
 disableDoubleTapZoom();
 
@@ -209,6 +209,9 @@ function handleServerMessage(data) {
       }
       // Если корабль утонул, обвести вокруг ВСЕ его клетки — и у стрелявшего, и у защищающегося
       if (sunk) {
+        if (sunk && by === role) {
+          updateShipPanel(myField, sunk.coords.length, true);
+        }
         const deltas = [
           [-1, -1], [-1, 0], [-1, 1],
           [0, -1], [0, 1],
@@ -337,7 +340,7 @@ function handleServerMessage(data) {
       const { from, text } = data;
       if (from !== role) {
         alert(text);
-      } 
+      }
       break;
 
     case 'error':

@@ -30,9 +30,9 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId, 
   wrapper.appendChild(exitBtn);
 
   // make utochka
-  const duckDiv = document.createElement('div');
-  duckDiv.id = 'duck-container';
-  wrapper.appendChild(duckDiv);
+  // const duckDiv = document.createElement('div');
+  // duckDiv.id = 'duck-container';
+  // wrapper.appendChild(duckDiv);
 
   // Обработка кнопки "Выход"
   exitBtn.onclick = () => {
@@ -62,6 +62,8 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId, 
   wrapper.appendChild(enemyField);
   buildGrid(enemyField, 11);
 
+  initShipPanel(myField);
+
   // Навесим обработчики на клетки врага
   enemyField.querySelectorAll('.cell').forEach(cell => {
     cell.addEventListener('click', () => {
@@ -89,6 +91,9 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId, 
     if (sunk) {
       const ringField = (by === role) ? enemyField : myField;
       placeSunkShip(ringField, sunk.coords);
+      if (sunk && by === role) {
+        updateShipPanel(myField, sunk.coords.length);
+      }
       const deltas = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
       sunk.coords.forEach(({ x: sx, y: sy }) => {
         deltas.forEach(([dx, dy]) => {
@@ -200,4 +205,62 @@ export function playExplosion(cell, frameDuration = 60, isHit, preloadedFire, pr
   }
 
   requestAnimationFrame(step);
+}
+
+
+// Создаёт панель кораблей с изначальными счётчиками
+function initShipPanel(field) {
+  // Позиции для мини-кораблей на панели
+  const SHIP_POSITIONS = {
+    4: { right: '0px', top: '60px' },
+    3: { right: '60px', top: '135px' },
+    2: { right: '60px', top: '60px' },
+    1: { right: '0px', top: '173px' }
+  };
+  const initial = { 4: 1, 3: 2, 2: 3, 1: 4 };
+
+  Object.entries(initial).forEach(([len, count]) => {
+    const shipDiv = document.createElement('div');
+    shipDiv.className = 'placed-ship-mini placed-ship-mini-counter';
+    shipDiv.dataset.length = len;
+    shipDiv.dataset.orientation = 'vertical';
+    shipDiv.style.position = 'absolute';
+    shipDiv.style.right = SHIP_POSITIONS[len].right;
+    shipDiv.style.top = SHIP_POSITIONS[len].top;
+
+    const counter = document.createElement('span');
+    counter.className = 'ship-counter';
+    counter.textContent = count;
+
+    shipDiv.appendChild(counter);
+    field.appendChild(shipDiv);
+  });
+}
+
+// Уменьшает счётчик затонувшего корабля заданной длины
+export function updateShipPanel(field, len, animation) {
+  const shipDiv = field.querySelector(`.placed-ship-mini-counter[data-length="${len}"]`);
+  if (!shipDiv) return;                      // защитная проверка
+  const counter = shipDiv.querySelector('.ship-counter');
+  if (!counter) return;
+
+  // Парсим текущее значение и уменьшаем
+  let remaining = parseInt(counter.textContent, 10) - 1;
+
+  if (remaining <= 0) {
+    // если больше нет — полупрозрачный и прячем число
+    shipDiv.style.opacity = '0.5';
+    counter.remove();
+  } else {
+    counter.textContent = remaining;
+    if (animation) {
+      // анимация «пересчёта»
+      counter.classList.add('animate-count');
+      counter.addEventListener(
+        'animationend',
+        () => counter.classList.remove('animate-count'),
+        { once: true }
+      );
+    }
+  }
 }

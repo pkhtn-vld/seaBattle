@@ -713,3 +713,33 @@ h2 {
   will-change: transform; /* GPU-композиция */
   z-index: 12;
 }
+
+/* контейнер счётчика */
+.ship-counter {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  line-height: 18px;
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+  background: rgba(0,0,0,0.6);
+  border-radius: 50%;
+  text-align: center;
+  pointer-events: none;
+  transition: transform 0.3s ease, color 0.3s ease;
+}
+
+/* быстрый «pop» при обновлении счётчика */
+@keyframes pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.4); }
+  100% { transform: scale(1); }
+}
+.animate-count {
+  animation: pop 0.4s ease-out;
+}
+
