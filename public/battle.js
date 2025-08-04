@@ -1,7 +1,7 @@
 // public/battle.js
 import { buildGrid } from './setup.js';
 
-export function startBattle(role, fleet, teardown, socket, secret_id, playerId, shots = []) {
+export function startBattle(role, initialFleet, teardown, socket, secret_id, playerId, shots = []) {
   console.log('startBattle()', role);
   document.body.classList.add('in-game');
 
@@ -47,7 +47,7 @@ export function startBattle(role, fleet, teardown, socket, secret_id, playerId, 
   buildGrid(myField, 11);
 
   // рисуем спрайт для каждого корабля
-  Object.values(fleet).forEach(coords => {
+  Object.values(initialFleet).forEach(coords => {
     placeSunkShip(myField, coords);
   });
 

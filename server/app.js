@@ -119,8 +119,8 @@ wss.on('connection', (ws) => {
           if (saved.player1 && saved.player2) {
             session.battleData = saved;
             session.initialFleets = {
-              player1: JSON.parse(JSON.stringify(saved.player1)),
-              player2: JSON.parse(JSON.stringify(saved.player2))
+              player1: JSON.parse(JSON.stringify(saved.initialFleets.player1)),
+              player2: JSON.parse(JSON.stringify(saved.initialFleets.player2))
             };
             log(`Подгружены флоты из файла для роли ${ws.role}`, 'info');
           }
@@ -159,8 +159,8 @@ wss.on('connection', (ws) => {
           if (saved.player1 && saved.player2) {
             session.battleData = saved;
             session.initialFleets = {
-              player1: JSON.parse(JSON.stringify(saved.player1)),
-              player2: JSON.parse(JSON.stringify(saved.player2))
+              player1: JSON.parse(JSON.stringify(saved.initialFleets.player1)),
+              player2: JSON.parse(JSON.stringify(saved.initialFleets.player2))
             };
             log(`Подгружены флоты из файла для ${ws.role}`, 'info');
           }
@@ -214,7 +214,7 @@ wss.on('connection', (ws) => {
           ['player1', 'player2'].forEach(roleKey => {
             send(session.sockets[roleKey], {
               type: 'battle',
-              fleet: session.battleData[roleKey],
+              initialFleet: session.initialFleets[roleKey],
               battle_ready: true,
               turn: session.battleData.turn,
               shots: session.battleData.shots
@@ -383,7 +383,7 @@ wss.on('connection', (ws) => {
       ['player1', 'player2'].forEach(roleKey => {
         session.sockets[roleKey].send(JSON.stringify({
           type: 'battle',
-          fleet: session.battleData[roleKey],
+          initialFleet: session.initialFleets[roleKey],
           battle_ready: true,
           turn: session.battleData.turn,
           shots: session.battleData.shots

@@ -145,7 +145,7 @@ function handleServerMessage(data) {
         import('./battle.js').then(mod => {
           mod.startBattle(
             role,
-            data.fleet,
+            data.initialFleet,
             teardown,
             socket,
             secret_id,
@@ -174,7 +174,7 @@ function handleServerMessage(data) {
         import('./battle.js').then(mod => {
           mod.startBattle(
             role,
-            data.fleet,
+            data.initialFleet,
             teardown,
             socket,
             secret_id,
