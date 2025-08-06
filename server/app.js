@@ -3,10 +3,9 @@
 // Зависимости
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
-import fs from 'fs';
 import path from 'path';
 import { send } from './utils.js';
-import { saveGame, deleteGame, ensureGamesFolder } from './fsGames.js';
+import { restoreGame, saveGame, deleteGame, ensureGamesFolder } from './fsGames.js';
 
 // Настройки
 // const PORT = 3012;
@@ -110,19 +109,8 @@ wss.on('connection', (ws) => {
         ws.playerId = playerId;
         ws.secret_id = secret_id;
 
-        // подгружаем battleData, если уже готовы оба флота
-        const file = path.join(GAMES_FOLDER, `${secret_id}.json`);
-        if (fs.existsSync(file)) {
-          const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
-          if (saved.player1 && saved.player2) {
-            session.battleData = saved;
-            session.initialFleets = {
-              player1: JSON.parse(JSON.stringify(saved.initialFleets.player1)),
-              player2: JSON.parse(JSON.stringify(saved.initialFleets.player2))
-            };
-            log(`Подгружены флоты из файла для роли ${ws.role}`, 'info');
-          }
-        }
+        // попытаемся восстановить игру из файла
+        await restoreGame(session, secret_id);
 
         // финальное связывание
         session.sockets[ws.role] = ws;
@@ -150,19 +138,8 @@ wss.on('connection', (ws) => {
         ws.playerId = playerId;
         ws.secret_id = secret_id;
 
-        // Загружаем battleData, если оба флота уже есть
-        const file = path.join(GAMES_FOLDER, `${secret_id}.json`);
-        if (fs.existsSync(file)) {
-          const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
-          if (saved.player1 && saved.player2) {
-            session.battleData = saved;
-            session.initialFleets = {
-              player1: JSON.parse(JSON.stringify(saved.initialFleets.player1)),
-              player2: JSON.parse(JSON.stringify(saved.initialFleets.player2))
-            };
-            log(`Подгружены флоты из файла для ${ws.role}`, 'info');
-          }
-        }
+        // попытаемся восстановить игру из файла
+        await restoreGame(session, secret_id);
 
         // Привязываем сокет и отвечаем
         session.sockets[ws.role] = ws;
@@ -180,7 +157,7 @@ wss.on('connection', (ws) => {
         // Инициализируем историю выстрелов, если нужно
         session.battleData.shots = session.battleData.shots || [];
 
-        // Сохраняем на диск
+        // Асинхронно сохраняем данные
         await saveGame(secret_id, session.battleData);
         log(`Данные игрока ${ws.role} сохранены`, 'debug');
 
@@ -199,10 +176,7 @@ wss.on('connection', (ws) => {
           session.battleData.initialFleets = session.initialFleets;
 
           // Сохраняем на диск вместе с turn
-          fs.writeFileSync(
-            path.join(GAMES_FOLDER, `${secret_id}.json`),
-            JSON.stringify(session.battleData, null, 2)
-          );
+          await saveGame(secret_id, session);
           log(`Оба игрока готовы. Бой начинается: ${secret_id}, ходит ${session.battleData.turn}`, 'info');
 
           // Рассылаем обоим игрокам сообщение о начале боя
