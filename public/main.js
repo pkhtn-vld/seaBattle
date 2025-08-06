@@ -427,8 +427,8 @@ window.addEventListener('load', () => {
 // Обработка кнопки "Подключение"
 connectBtn.onclick = () => {
   secret_id = secretInput.value.trim();
-  if (!secret_id || secret_id.length > 8) {
-    return alert('Secret ID должен быть не длиннее 8 символов');
+  if (!secret_id || secret_id.length > 1) {
+    return alert('Secret ID должен быть не длиннее 1 символа');
   }
   openSocket(false);
 };

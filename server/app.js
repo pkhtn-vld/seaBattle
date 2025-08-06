@@ -14,6 +14,43 @@ const GAMES_FOLDER = path.join('./server/games');
 
 // Хранилище сессий в памяти
 const sessions = {}; // secret_id → { sockets: { player1, player2 } }
+// Очередь операций для каждой сессии
+const sessionQueues = {};
+
+// Обёртка для последовательного выполнения async-операций в конкретной сессии.
+function queueSessionOp(secret_id, op) {
+  if (!sessionQueues[secret_id]) sessionQueues[secret_id] = [];
+  const queue = sessionQueues[secret_id];
+
+  return new Promise((resolve, reject) => {
+    const run = async () => {
+      try {
+        const result = await op();
+        resolve(result);
+      } catch (err) {
+        reject(err);
+      } finally {
+        queue.shift();
+        if (queue.length) queue[0]();         // запускаем следующую
+        else delete sessionQueues[secret_id]; // чистим очередь
+      }
+    };
+
+    queue.push(run);
+    if (queue.length === 1) run();            // если очередь была пуста — стартуем
+  });
+}
+
+// Гарантированно возвращает объект сессии, создавая при необходимости.
+function getSession(secret_id) {
+  if (!sessions[secret_id]) {
+    sessions[secret_id] = {
+      playerIds: { player1: null, player2: null },
+      sockets: { player1: null, player2: null }
+    };
+  }
+  return sessions[secret_id];
+}
 
 // Логирование
 function log(msg, level = 'info') {
@@ -61,10 +98,14 @@ wss.on('connection', (ws) => {
 
     // Инициализация сессии при необходимости
     if (!sessions[secret_id]) {
-      sessions[secret_id] = { sockets: { player1: null, player2: null } };
+      sessions[secret_id] = {
+        sockets: { player1: null, player2: null },
+        lastActive: Date.now()
+      };
       log(`Создана новая сессия ${secret_id}`, 'debug');
     }
     const session = sessions[secret_id];
+    session.lastActive = Date.now();
 
     // Инициализируем mapping playerIds, если нужно
     session.playerIds = session.playerIds || { player1: null, player2: null };
@@ -72,81 +113,98 @@ wss.on('connection', (ws) => {
     switch (type) {
 
       case 'connect': {
-        // очистка устаревших слотов
-        // Если у роли есть сохранённый playerId, но нет живого сокета — считаем слот свободным.
-        for (const roleKey of ['player1', 'player2']) {
-          if (session.playerIds?.[roleKey] && (!session.sockets[roleKey] || session.sockets[roleKey].readyState !== WebSocket.OPEN)) {
-            session.playerIds[roleKey] = null;
+        await queueSessionOp(secret_id, async () => {
+          const session = getSession(secret_id);
+
+          // 1) Сбрасываем «мертвые» сокеты (если readyState CLOSED)
+          for (const role of ['player1', 'player2']) {
+            const s = session.sockets[role];
+            if (s && s.readyState === WebSocket.CLOSED) {
+              session.sockets[role] = null;
+            }
           }
-        }
 
-        // инициализация playerIds
-        session.playerIds = session.playerIds || { player1: null, player2: null };
+          // 2) Определяем, куда встать этому playerId
+          let assignedRole = null;
 
-        // восстановление по старому playerId
-        if (session.playerIds.player1 === playerId) {
-          ws.role = 'player1';
-        } else if (session.playerIds.player2 === playerId) {
-          ws.role = 'player2';
-        } else {
-          // выдаём первую свободную роль
-          if (!session.playerIds.player1) {
-            ws.role = 'player1';
+          // 2.1) Вернуть старую роль, если он был здесь и сейчас нет активного сокета
+          if (session.playerIds.player1 === playerId && !session.sockets.player1) {
+            assignedRole = 'player1';
+          }
+          else if (session.playerIds.player2 === playerId && !session.sockets.player2) {
+            assignedRole = 'player2';
+          }
+          // 2.2) Новый игрок — первый свободный слот
+          else if (!session.sockets.player1) {
+            assignedRole = 'player1';
             session.playerIds.player1 = playerId;
-          } else if (!session.playerIds.player2) {
-            ws.role = 'player2';
-            session.playerIds.player2 = playerId;
-          } else {
-            // оба слота заняты — честно говорим, что комната полна
-            // ws.send(JSON.stringify({
-            //   type: 'error',
-            //   message: 'Комната уже заполнена двумя игроками'
-            // }));
-            return;
           }
-        }
+          else if (!session.sockets.player2) {
+            assignedRole = 'player2';
+            session.playerIds.player2 = playerId;
+          }
+          else {
+            // оба слота заняты
+            return ws.send(JSON.stringify({
+              type: 'error',
+              message: 'Комната заполнена'
+            }));
+          }
 
-        ws.playerId = playerId;
-        ws.secret_id = secret_id;
+          // 3) Привязываем сокет и данные
+          ws.role = assignedRole;
+          ws.playerId = playerId;
+          ws.secret_id = secret_id;
 
-        // попытаемся восстановить игру из файла
-        await restoreGame(session, secret_id);
+          session.sockets[assignedRole] = ws;
 
-        // финальное связывание
-        session.sockets[ws.role] = ws;
-        log(`Назначена роль ${ws.role} в сессии ${secret_id}`, 'info');
-        ws.send(JSON.stringify({ type: 'role_assigned', role: ws.role }));
+          // 4) Восстанавливаем игру (если нужно) и уведомляем клиента
+          await restoreGame(session, secret_id);
+          ws.send(JSON.stringify({
+            type: 'role_assigned',
+            role: assignedRole
+          }));
+        });
         break;
       }
+
 
       case 'reconnect': {
-        // убедимся, что есть playerIds
-        session.playerIds = session.playerIds || { player1: null, player2: null };
+        await queueSessionOp(secret_id, async () => {
+          const session = getSession(secret_id);
+          const role = clientRole; // из body: 'player1' или 'player2'
 
-        // Проверяем, что прислан clientRole валиден и совпадает с сохранённым playerId
-        if (!['player1', 'player2'].includes(clientRole) ||
-          session.playerIds[clientRole] !== playerId) {
-          // ws.send(JSON.stringify({
-          //   type: 'error',
-          //   message: 'Невозможный reconnect: неверная роль или playerId'
-          // }));
-          return;
-        }
+          // Валидация
+          if (!['player1', 'player2'].includes(role) ||
+            session.playerIds[role] !== playerId) {
+            return ws.send(JSON.stringify({
+              type: 'error',
+              message: 'Невозможен reconnect: неверная роль или playerId'
+            }));
+          }
 
-        // Берём слот за собой
-        ws.role = clientRole;
-        ws.playerId = playerId;
-        ws.secret_id = secret_id;
+          // Закрываем прежний сокет для этой роли, если он ещё жив
+          const old = session.sockets[role];
+          if (old && old.readyState !== WebSocket.CLOSED) {
+            old.close();
+          }
 
-        // попытаемся восстановить игру из файла
-        await restoreGame(session, secret_id);
+          // Привязанная работа сессии
+          ws.role = role;
+          ws.playerId = playerId;
+          ws.secret_id = secret_id;
+          session.sockets[role] = ws;
 
-        // Привязываем сокет и отвечаем
-        session.sockets[ws.role] = ws;
-        log(`Успешный reconnect для ${ws.role} в ${secret_id}`, 'info');
-        ws.send(JSON.stringify({ type: 'role_assigned', role: ws.role }));
+          // Восстанавливаем состояние и отвечаем
+          await restoreGame(session, secret_id);
+          ws.send(JSON.stringify({
+            type: 'role_assigned',
+            role
+          }));
+        });
         break;
       }
+
 
       case 'battle_start':
         log(`battle_start от ${ws.role} в сессии ${secret_id}`, 'info');
@@ -176,7 +234,7 @@ wss.on('connection', (ws) => {
           session.battleData.initialFleets = session.initialFleets;
 
           // Сохраняем на диск вместе с turn
-          await saveGame(secret_id, session);
+          await saveGame(secret_id, session.battleData);
           log(`Оба игрока готовы. Бой начинается: ${secret_id}, ходит ${session.battleData.turn}`, 'info');
 
           // Рассылаем обоим игрокам сообщение о начале боя
@@ -266,7 +324,6 @@ wss.on('connection', (ws) => {
           winner: gameOver ? ws.role : null
         });
 
-        const filePath = path.join(GAMES_FOLDER, `${secret_id}.json`);
         if (gameOver) {
           // удаляем игру
           await deleteGame(secret_id);
@@ -358,19 +415,45 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('close', () => {
-    const { secret_id, role } = ws;
-    if (!secret_id || !role) return;
+    // Последовательная обработка в рамках одной сессии
+    queueSessionOp(ws.secret_id, () => {
+      const session = sessions[ws.secret_id];
+      if (!session) return;
 
-    const session = sessions[secret_id];
-    if (!session) return;
+      // Если это один из игроков и сокет совпал с хранимым
+      if (ws.role && session.sockets[ws.role] === ws) {
+        // освобождаем слот
+        session.sockets[ws.role] = null;
 
-    log(`Отключён сокет: ${role} в ${secret_id}`, 'info');
-    session.sockets[role] = null;
+        // определяем «другого» игрока
+        const otherRole = ws.role === 'player1' ? 'player2' : 'player1';
+        const other = session.sockets[otherRole];
 
-    const otherRole = role === 'player1' ? 'player2' : 'player1';
-    const other = session.sockets[otherRole];
-
-    // Уведомляем только соперника
-    send(other, { type: 'pause' });
+        // 2) Если второй игрок всё ещё на связи — отправляем pause
+        if (other && other.readyState === WebSocket.OPEN) {
+          other.send(JSON.stringify({ type: 'pause' }));
+        }
+      }
+    });
   });
+
+
 });
+
+const SESSION_TTL = 5 * 60 * 1000; // 5 минут
+const GC_INTERVAL = 60 * 1000;           // 1 минута
+
+// Удаление мертвых сессий
+setInterval(() => {
+  const now = Date.now();
+  for (const [secret_id, session] of Object.entries(sessions)) {
+    const hasLiveSocket = ['player1', 'player2'].some(
+      role => session.sockets[role]?.readyState === WebSocket.OPEN
+    );
+
+    if (!hasLiveSocket && (now - session.lastActive) > SESSION_TTL) {
+      log(`Удаляем сессию ${secret_id}`, 'info');
+      delete sessions[secret_id];
+    }
+  }
+}, GC_INTERVAL);
