@@ -6,6 +6,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import fs from 'fs';
 import path from 'path';
 import { send } from './utils.js';
+import { saveGame, deleteGame, ensureGamesFolder } from './fsGames.js';
 
 // Настройки
 // const PORT = 3012;
@@ -21,11 +22,8 @@ function log(msg, level = 'info') {
   console.log(`[${ts}] [${level}] ${msg}`);
 }
 
-// Убедимся, что папка игр существует
-if (!fs.existsSync(GAMES_FOLDER)) {
-  fs.mkdirSync(GAMES_FOLDER, { recursive: true });
-  log('Создана папка games', 'init');
-}
+// Убедимся, что папка игр существует или создадим ее
+await ensureGamesFolder();
 
 // Express + фронт
 const app = express();
@@ -45,7 +43,7 @@ wss.on('connection', (ws) => {
   ws.role = null;
   ws.secret_id = null;
 
-  ws.on('message', (raw) => {
+  ws.on('message', async (raw) => {
     let data;
     try {
       data = JSON.parse(raw);
@@ -183,10 +181,7 @@ wss.on('connection', (ws) => {
         session.battleData.shots = session.battleData.shots || [];
 
         // Сохраняем на диск
-        fs.writeFileSync(
-          path.join(GAMES_FOLDER, `${secret_id}.json`),
-          JSON.stringify(session.battleData, null, 2)
-        );
+        await saveGame(secret_id, session.battleData);
         log(`Данные игрока ${ws.role} сохранены`, 'debug');
 
         // Если оба игрока прислали данные — начинаем бой
@@ -300,16 +295,12 @@ wss.on('connection', (ws) => {
         const filePath = path.join(GAMES_FOLDER, `${secret_id}.json`);
         if (gameOver) {
           // удаляем игру
-          try {
-            fs.unlinkSync(filePath);
-            log(`Игра ${secret_id} окончена, файл удалён`, 'info');
-          } catch (e) {
-            log(`Не удалось удалить файл ${filePath}: ${e.message}`, 'error');
-          }
+          await deleteGame(secret_id);
+          log(`Игра ${secret_id} окончена, файл удалён`, 'info');
           delete sessions[secret_id];
         } else {
           // сохраняем обновления
-          fs.writeFileSync(filePath, JSON.stringify(bd, null, 2));
+          await saveGame(secret_id, bd);
           log(`Игра ${secret_id} обновлена после выстрела`, 'debug');
         }
         // Рассылаем результат обоим игрокам
