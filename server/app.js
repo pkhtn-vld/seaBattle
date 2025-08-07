@@ -10,7 +10,6 @@ import { restoreGame, saveGame, deleteGame, ensureGamesFolder } from './fsGames.
 // Настройки
 // const PORT = 3012;
 const PORT = process.env.PORT || 3000;
-const GAMES_FOLDER = path.join('./server/games');
 
 // Хранилище сессий в памяти
 const sessions = {}; // secret_id → { sockets: { player1, player2 } }
@@ -76,6 +75,8 @@ wss.on('connection', (ws) => {
 
   // Добавим состояние сокету
   ws.isAlive = true;
+  ws.on('pong', () => { ws.isAlive = true; });
+  
   ws.role = null;
   ws.secret_id = null;
 
@@ -116,7 +117,7 @@ wss.on('connection', (ws) => {
         await queueSessionOp(secret_id, async () => {
           const session = getSession(secret_id);
 
-          // 1) Сбрасываем «мертвые» сокеты (если readyState CLOSED)
+          // Сбрасываем «мертвые» сокеты (если readyState CLOSED)
           for (const role of ['player1', 'player2']) {
             const s = session.sockets[role];
             if (s && s.readyState === WebSocket.CLOSED) {
@@ -124,17 +125,17 @@ wss.on('connection', (ws) => {
             }
           }
 
-          // 2) Определяем, куда встать этому playerId
+          // Определяем, куда встать этому playerId
           let assignedRole = null;
 
-          // 2.1) Вернуть старую роль, если он был здесь и сейчас нет активного сокета
+          // Вернуть старую роль, если он был здесь и сейчас нет активного сокета
           if (session.playerIds.player1 === playerId && !session.sockets.player1) {
             assignedRole = 'player1';
           }
           else if (session.playerIds.player2 === playerId && !session.sockets.player2) {
             assignedRole = 'player2';
           }
-          // 2.2) Новый игрок — первый свободный слот
+          // Новый игрок — первый свободный слот
           else if (!session.sockets.player1) {
             assignedRole = 'player1';
             session.playerIds.player1 = playerId;
@@ -151,14 +152,14 @@ wss.on('connection', (ws) => {
             }));
           }
 
-          // 3) Привязываем сокет и данные
+          // Привязываем сокет и данные
           ws.role = assignedRole;
           ws.playerId = playerId;
           ws.secret_id = secret_id;
 
           session.sockets[assignedRole] = ws;
 
-          // 4) Восстанавливаем игру (если нужно) и уведомляем клиента
+          // Восстанавливаем игру (если нужно) и уведомляем клиента
           await restoreGame(session, secret_id);
           ws.send(JSON.stringify({
             type: 'role_assigned',
@@ -207,138 +208,89 @@ wss.on('connection', (ws) => {
 
 
       case 'battle_start':
-        log(`battle_start от ${ws.role} в сессии ${secret_id}`, 'info');
+        await queueSessionOp(secret_id, async () => {
+          log(`battle_start от ${ws.role} в сессии ${secret_id}`, 'info');
 
-        // Инициализируем battleData, если её нет
-        session.battleData = session.battleData || {};
-        session.battleData[ws.role] = data.fleet; // сохраняем данные флота
-        // Инициализируем историю выстрелов, если нужно
-        session.battleData.shots = session.battleData.shots || [];
+          session.battleData = session.battleData || {};
+          session.battleData[ws.role] = data.fleet;
+          session.battleData.shots = session.battleData.shots || [];
 
-        // Асинхронно сохраняем данные
-        await saveGame(secret_id, session.battleData);
-        log(`Данные игрока ${ws.role} сохранены`, 'debug');
-
-        // Если оба игрока прислали данные — начинаем бой
-        if (session.battleData.player1 && session.battleData.player2) {
-          // Выбираем, кто ходит первым
-          session.battleData.turn = session.battleData.turn || 'player1';
-
-          // Сохраняем чистую копию каждого флота для определения sunk‑coords
-          session.initialFleets = {
-            player1: JSON.parse(JSON.stringify(session.battleData.player1)),
-            player2: JSON.parse(JSON.stringify(session.battleData.player2))
-          };
-
-          // Включаем initialFleets в сохраняемый JSON
-          session.battleData.initialFleets = session.initialFleets;
-
-          // Сохраняем на диск вместе с turn
           await saveGame(secret_id, session.battleData);
-          log(`Оба игрока готовы. Бой начинается: ${secret_id}, ходит ${session.battleData.turn}`, 'info');
+          log(`Данные игрока ${ws.role} сохранены`, 'debug');
 
-          // Рассылаем обоим игрокам сообщение о начале боя
-          ['player1', 'player2'].forEach(roleKey => {
-            send(session.sockets[roleKey], {
-              type: 'battle',
-              initialFleet: session.initialFleets[roleKey],
-              battle_ready: true,
-              turn: session.battleData.turn,
-              shots: session.battleData.shots
+          if (session.battleData.player1 && session.battleData.player2) {
+            session.battleData.turn = session.battleData.turn || 'player1';
+            session.initialFleets = {
+              player1: structuredClone(session.battleData.player1),
+              player2: structuredClone(session.battleData.player2),
+            };
+            session.battleData.initialFleets = session.initialFleets;
+
+            await saveGame(secret_id, session.battleData);
+            log(`Оба игрока готовы. Бой начинается: ${secret_id}, ходит ${session.battleData.turn}`, 'info');
+
+            ['player1', 'player2'].forEach(roleKey => {
+              send(session.sockets[roleKey], {
+                type: 'battle',
+                initialFleet: session.initialFleets[roleKey],
+                battle_ready: true,
+                turn: session.battleData.turn,
+                shots: session.battleData.shots,
+              });
             });
-          });
-        }
-        return;
-
-      case 'shoot': {
-        const { x, y } = data;
-        const session = sessions[secret_id];
-        const bd = session.battleData;
-
-        // Проверка очереди
-        if (bd.turn !== ws.role) {
-          // return send(ws, { type: 'error', message: 'Сейчас не ваш ход' });
-          return;
-        }
-
-        // Определяем противника
-        const enemyRole = ws.role === 'player1' ? 'player2' : 'player1';
-        const enemyFleet = bd[enemyRole];
-
-        let isHit = false;
-        let sunk = null;
-
-        // Ищем попадание по каждому кораблю
-        for (const [shipName, coords] of Object.entries(enemyFleet)) {
-          const idx = coords.findIndex(p => p.x === x && p.y === y);
-          if (idx !== -1) {
-            isHit = true;
-            // Сколько осталось до удаления
-            const before = coords.length;
-            coords.splice(idx, 1);
-            const after = coords.length;
-            log(`Попадание в ${shipName} у ${enemyRole}: до=${before}, после=${after}`, 'debug');
-
-            if (after === 0) {
-              log(`→ Корабль ${shipName} потоплен!`, 'info');
-              sunk = {
-                ship: shipName,
-                coords: session.initialFleets[enemyRole][shipName]
-              };
-            }
-            break;
           }
-        }
-
-        // Проверяем, всё ли корабли уничтожены
-        const gameOver = Object.values(enemyFleet).every(coords => coords.length === 0);
-
-        // Если промах — переключаем ход, иначе оставляем текущего
-        if (!isHit && !gameOver) bd.turn = enemyRole;
-
-        // Результат выстрела
-        const result = {
-          type: 'shot_result',
-          x, y,
-          isHit,
-          by: ws.role,
-          turn: bd.turn
-        };
-
-        if (gameOver) {
-          result.gameOver = true;
-          result.winner = ws.role;
-        }
-
-        if (sunk) result.sunk = sunk;
-
-        // Добавляем запись в историю
-        bd.shots = bd.shots || [];
-        bd.shots.push({
-          x,
-          y,
-          isHit,
-          by: ws.role,
-          sunk: sunk || null,
-          gameOver: gameOver,
-          winner: gameOver ? ws.role : null
         });
-
-        if (gameOver) {
-          // удаляем игру
-          await deleteGame(secret_id);
-          log(`Игра ${secret_id} окончена, файл удалён`, 'info');
-          delete sessions[secret_id];
-        } else {
-          // сохраняем обновления
-          await saveGame(secret_id, bd);
-          log(`Игра ${secret_id} обновлена после выстрела`, 'debug');
-        }
-        // Рассылаем результат обоим игрокам
-        send(session.sockets.player1, result);
-        send(session.sockets.player2, result);
         return;
-      }
+
+
+      case 'shoot':
+        await queueSessionOp(secret_id, async () => {
+          const { x, y } = data;
+          const session = sessions[secret_id];
+          const bd = session.battleData;
+
+          if (bd.turn !== ws.role) return;
+
+          // Логика попадания
+          const enemyRole = ws.role === 'player1' ? 'player2' : 'player1';
+          const enemyFleet = bd[enemyRole];
+          let isHit = false, sunk = null;
+
+          for (const [shipName, coords] of Object.entries(enemyFleet)) {
+            const idx = coords.findIndex(p => p.x === x && p.y === y);
+            if (idx !== -1) {
+              isHit = true;
+              coords.splice(idx, 1);
+              if (coords.length === 0) {
+                sunk = { ship: shipName, coords: session.initialFleets[enemyRole][shipName] };
+                log(`→ Корабль ${shipName} потоплен!`, 'info');
+              }
+              break;
+            }
+          }
+
+          const gameOver = Object.values(enemyFleet).every(c => c.length === 0);
+          if (!isHit && !gameOver) bd.turn = enemyRole;
+
+          const result = { type: 'shot_result', x, y, isHit, by: ws.role, turn: bd.turn };
+          if (sunk) result.sunk = sunk;
+          if (gameOver) { result.gameOver = true; result.winner = ws.role; }
+
+          bd.shots.push({ x, y, isHit, sunk: sunk || null, gameOver, winner: gameOver ? ws.role : null });
+
+          if (gameOver) {
+            await deleteGame(secret_id);
+            delete sessions[secret_id];
+            log(`Игра ${secret_id} окончена, файл удалён`, 'info');
+          } else {
+            await saveGame(secret_id, bd);
+            log(`Игра ${secret_id} обновлена после выстрела`, 'debug');
+          }
+
+          send(session.sockets.player1, result);
+          send(session.sockets.player2, result);
+        });
+        return;
 
       case 'chat': {
         const { text } = data;
@@ -429,7 +381,7 @@ wss.on('connection', (ws) => {
         const otherRole = ws.role === 'player1' ? 'player2' : 'player1';
         const other = session.sockets[otherRole];
 
-        // 2) Если второй игрок всё ещё на связи — отправляем pause
+        // Если второй игрок всё ещё на связи — отправляем pause
         if (other && other.readyState === WebSocket.OPEN) {
           other.send(JSON.stringify({ type: 'pause' }));
         }
@@ -441,7 +393,7 @@ wss.on('connection', (ws) => {
 });
 
 const SESSION_TTL = 5 * 60 * 1000; // 5 минут
-const GC_INTERVAL = 60 * 1000;           // 1 минута
+const GC_INTERVAL = 60 * 1000;     // 1 минута
 
 // Удаление мертвых сессий
 setInterval(() => {
@@ -457,3 +409,13 @@ setInterval(() => {
     }
   }
 }, GC_INTERVAL);
+
+// Регулярный heartbeat для всех сокетов
+const HEARTBEAT_INTERVAL = 30 * 1000;
+setInterval(() => {
+  wss.clients.forEach(ws => {
+    if (!ws.isAlive) return ws.terminate();
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, HEARTBEAT_INTERVAL);
