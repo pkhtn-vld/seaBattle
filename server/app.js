@@ -40,6 +40,54 @@ function queueSessionOp(secret_id, op) {
   });
 }
 
+async function postProcessMessage(type, ws, session, secret_id) {
+  // Привязываем сокет к сессии
+  ws.secret_id = secret_id;
+  session.sockets[ws.role] = ws;
+  log(`Назначена роль ${ws.role} в сессии ${secret_id}`, 'info');
+
+  // Отправляем роль клиенту
+  ws.send(JSON.stringify({ type: 'role_assigned', role: ws.role }));
+
+  const p1 = session.sockets.player1;
+  const p2 = session.sockets.player2;
+  const both = Boolean(p1 && p2);
+
+  if (type === 'connect') {
+    if (both) {
+      log(`Оба игрока подключены: ${secret_id}`, 'info');
+      p1.send(JSON.stringify({ type: 'connected' }));
+      p2.send(JSON.stringify({ type: 'connected' }));
+    } else {
+      ws.send(JSON.stringify({ type: 'waiting' }));
+    }
+
+  } else {
+    // reconnect
+    if (both) {
+      log(`Сессия восстановлена: ${secret_id}`, 'info');
+      p1.send(JSON.stringify({ type: 'resume' }));
+      p2.send(JSON.stringify({ type: 'resume' }));
+    } else {
+      ws.send(JSON.stringify({ type: 'waiting' }));
+    }
+  }
+
+  // === Универсальная проверка: если оба флота уже сохранены ===
+  if (session.battleData?.player1 && session.battleData?.player2 && both) {
+    log(`Рестарт боя для сессии ${secret_id}`, 'info');
+    ['player1', 'player2'].forEach(roleKey => {
+      session.sockets[roleKey].send(JSON.stringify({
+        type: 'battle',
+        initialFleet: session.initialFleets[roleKey],
+        battle_ready: true,
+        turn: session.battleData.turn,
+        shots: session.battleData.shots
+      }));
+    });
+  }
+}
+
 // Гарантированно возвращает объект сессии, создавая при необходимости.
 function getSession(secret_id) {
   if (!sessions[secret_id]) {
@@ -76,7 +124,7 @@ wss.on('connection', (ws) => {
   // Добавим состояние сокету
   ws.isAlive = true;
   ws.on('pong', () => { ws.isAlive = true; });
-  
+
   ws.role = null;
   ws.secret_id = null;
 
@@ -113,7 +161,7 @@ wss.on('connection', (ws) => {
 
     switch (type) {
 
-      case 'connect': {
+      case 'connect':
         await queueSessionOp(secret_id, async () => {
           const session = getSession(secret_id);
 
@@ -161,16 +209,13 @@ wss.on('connection', (ws) => {
 
           // Восстанавливаем игру (если нужно) и уведомляем клиента
           await restoreGame(session, secret_id);
-          ws.send(JSON.stringify({
-            type: 'role_assigned',
-            role: assignedRole
-          }));
+          await postProcessMessage(type, ws, session, secret_id);
         });
-        break;
-      }
+        
+        return;
 
 
-      case 'reconnect': {
+      case 'reconnect':
         await queueSessionOp(secret_id, async () => {
           const session = getSession(secret_id);
           const role = clientRole; // из body: 'player1' или 'player2'
@@ -198,14 +243,10 @@ wss.on('connection', (ws) => {
 
           // Восстанавливаем состояние и отвечаем
           await restoreGame(session, secret_id);
-          ws.send(JSON.stringify({
-            type: 'role_assigned',
-            role
-          }));
+          await postProcessMessage(type, ws, session, secret_id);
         });
-        break;
-      }
 
+        return;
 
       case 'battle_start':
         await queueSessionOp(secret_id, async () => {
@@ -242,7 +283,6 @@ wss.on('connection', (ws) => {
         });
         return;
 
-
       case 'shoot':
         await queueSessionOp(secret_id, async () => {
           const { x, y } = data;
@@ -276,7 +316,7 @@ wss.on('connection', (ws) => {
           if (sunk) result.sunk = sunk;
           if (gameOver) { result.gameOver = true; result.winner = ws.role; }
 
-          bd.shots.push({ x, y, isHit, sunk: sunk || null, gameOver, winner: gameOver ? ws.role : null });
+          bd.shots.push({ x, y, isHit, by: ws.role, sunk: sunk || null, gameOver, winner: gameOver ? ws.role : null });
 
           if (gameOver) {
             await deleteGame(secret_id);
@@ -317,52 +357,6 @@ wss.on('connection', (ws) => {
       default:
         ws.send(JSON.stringify({ type: 'error', message: 'Неизвестный тип' }));
         return;
-    }
-
-    // Привязываем сокет к сессии
-    ws.secret_id = secret_id;
-    session.sockets[ws.role] = ws;
-    log(`Назначена роль ${ws.role} в сессии ${secret_id}`, 'info');
-
-    // Отправляем роль клиенту
-    ws.send(JSON.stringify({ type: 'role_assigned', role: ws.role }));
-
-    const p1 = session.sockets.player1;
-    const p2 = session.sockets.player2;
-    const both = Boolean(p1 && p2);
-
-    if (type === 'connect') {
-      if (both) {
-        log(`Оба игрока подключены: ${secret_id}`, 'info');
-        p1.send(JSON.stringify({ type: 'connected' }));
-        p2.send(JSON.stringify({ type: 'connected' }));
-      } else {
-        ws.send(JSON.stringify({ type: 'waiting' }));
-      }
-
-    } else {
-      // reconnect
-      if (both) {
-        log(`Сессия восстановлена: ${secret_id}`, 'info');
-        p1.send(JSON.stringify({ type: 'resume' }));
-        p2.send(JSON.stringify({ type: 'resume' }));
-      } else {
-        ws.send(JSON.stringify({ type: 'waiting' }));
-      }
-    }
-
-    // === Универсальная проверка: если оба флота уже сохранены ===
-    if (session.battleData?.player1 && session.battleData?.player2 && both) {
-      log(`Рестарт боя для сессии ${secret_id}`, 'info');
-      ['player1', 'player2'].forEach(roleKey => {
-        session.sockets[roleKey].send(JSON.stringify({
-          type: 'battle',
-          initialFleet: session.initialFleets[roleKey],
-          battle_ready: true,
-          turn: session.battleData.turn,
-          shots: session.battleData.shots
-        }));
-      });
     }
   });
 
