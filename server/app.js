@@ -1,108 +1,15 @@
 // app.js
-
-// Зависимости
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
-import { send } from './utils.js';
+import { send, queueSessionOp, postProcessMessage, getSession, log, startSessionGarbageCollector, startWebSocketHeartbeat } from './utils.js';
 import { restoreGame, saveGame, deleteGame, ensureGamesFolder } from './fsGames.js';
 
-// Настройки
-// const PORT = 3012;
 const PORT = process.env.PORT || 3000;
-
-// Хранилище сессий в памяти
-const sessions = {}; // secret_id → { sockets: { player1, player2 } }
-// Очередь операций для каждой сессии
-const sessionQueues = {};
-
-// Обёртка для последовательного выполнения async-операций в конкретной сессии.
-function queueSessionOp(secret_id, op) {
-  if (!sessionQueues[secret_id]) sessionQueues[secret_id] = [];
-  const queue = sessionQueues[secret_id];
-
-  return new Promise((resolve, reject) => {
-    const run = async () => {
-      try {
-        const result = await op();
-        resolve(result);
-      } catch (err) {
-        reject(err);
-      } finally {
-        queue.shift();
-        if (queue.length) queue[0]();         // запускаем следующую
-        else delete sessionQueues[secret_id]; // чистим очередь
-      }
-    };
-
-    queue.push(run);
-    if (queue.length === 1) run();            // если очередь была пуста — стартуем
-  });
-}
-
-async function postProcessMessage(type, ws, session, secret_id) {
-  // Привязываем сокет к сессии
-  ws.secret_id = secret_id;
-  session.sockets[ws.role] = ws;
-  log(`Назначена роль ${ws.role} в сессии ${secret_id}`, 'info');
-
-  // Отправляем роль клиенту
-  send(ws, { type: 'role_assigned', role: ws.role });
-
-  const p1 = session.sockets.player1;
-  const p2 = session.sockets.player2;
-  const both = Boolean(p1 && p2);
-
-  if (type === 'connect') {
-    if (both) {
-      log(`Оба игрока подключены: ${secret_id}`, 'info');
-      send(p1, { type: 'connected' });
-      send(p2, { type: 'connected' });
-    } else {
-      send(ws, { type: 'waiting' });
-    }
-
-  } else {
-    // reconnect
-    if (both) {
-      log(`Сессия восстановлена: ${secret_id}`, 'info');
-      send(p1, { type: 'resume' });
-      send(p2, { type: 'resume' });
-    } else {
-      send(ws, { type: 'waiting' });
-    }
-  }
-
-  // === Универсальная проверка: если оба флота уже сохранены ===
-  if (session.battleData?.player1 && session.battleData?.player2 && both) {
-    log(`Рестарт боя для сессии ${secret_id}`, 'info');
-    ['player1', 'player2'].forEach(roleKey => {
-      send(session.sockets[roleKey], {
-        type: 'battle',
-        initialFleet: session.initialFleets[roleKey],
-        battle_ready: true,
-        turn: session.battleData.turn,
-        shots: session.battleData.shots
-      });
-    });
-  }
-}
-
-// Гарантированно возвращает объект сессии, создавая при необходимости.
-function getSession(secret_id) {
-  if (!sessions[secret_id]) {
-    sessions[secret_id] = {
-      playerIds: { player1: null, player2: null },
-      sockets: { player1: null, player2: null }
-    };
-  }
-  return sessions[secret_id];
-}
-
-// Логирование
-function log(msg, level = 'info') {
-  const ts = new Date().toISOString().replace('T', ' ').split('.')[0];
-  console.log(`[${ts}] [${level}] ${msg}`);
-}
+const sessions = {}; // Хранилище сессий в памяти, secret_id → { sockets: { player1, player2 } }
+const sessionQueues = {}; // Очередь операций для каждой сессии
+const SESSION_TTL = 5 * 60 * 1000; // 5 минут
+const GC_INTERVAL = 60 * 1000;     // 1 минута
+const HEARTBEAT_INTERVAL = 30 * 1000; // 30 сек
 
 // Убедимся, что папка игр существует или создадим ее
 await ensureGamesFolder();
@@ -164,7 +71,7 @@ wss.on('connection', (ws) => {
         case 'connect':
           try {
             await queueSessionOp(secret_id, async () => {
-              const session = getSession(secret_id);
+              const session = getSession(secret_id, sessions);
 
               // Сбрасываем «мертвые» сокеты (если readyState CLOSED)
               for (const role of ['player1', 'player2']) {
@@ -209,7 +116,7 @@ wss.on('connection', (ws) => {
               // Восстанавливаем игру (если нужно) и уведомляем клиента
               await restoreGame(session, secret_id);
               await postProcessMessage(type, ws, session, secret_id);
-            });
+            }, sessionQueues);
           } catch (err) {
             log(`Ошибка обработки ${type} в сессии ${secret_id}: ${err}`, 'error');
             send(ws, { type: 'error', message: 'Internal server error' });
@@ -220,7 +127,7 @@ wss.on('connection', (ws) => {
         case 'reconnect':
           try {
             await queueSessionOp(secret_id, async () => {
-              const session = getSession(secret_id);
+              const session = getSession(secret_id, sessions);
               const role = clientRole; // из body: 'player1' или 'player2'
 
               // Валидация
@@ -248,7 +155,7 @@ wss.on('connection', (ws) => {
               // Восстанавливаем состояние и отвечаем
               await restoreGame(session, secret_id);
               await postProcessMessage(type, ws, session, secret_id);
-            });
+            }, sessionQueues);
           } catch (err) {
             log(`Ошибка обработки ${type} в сессии ${secret_id}: ${err}`, 'error');
             send(ws, { type: 'error', message: 'Internal server error' });
@@ -288,7 +195,7 @@ wss.on('connection', (ws) => {
                   });
                 });
               }
-            });
+            }, sessionQueues);
           } catch (err) {
             log(`Ошибка обработки ${type} в сессии ${secret_id}: ${err}`, 'error');
             send(ws, { type: 'error', message: 'Internal server error' });
@@ -342,31 +249,12 @@ wss.on('connection', (ws) => {
 
               send(session.sockets.player1, result);
               send(session.sockets.player2, result);
-            });
+            }, sessionQueues);
           } catch (err) {
             log(`Ошибка обработки ${type} в сессии ${secret_id}: ${err}`, 'error');
             send(ws, { type: 'error', message: 'Internal server error' });
           }
           return;
-
-        case 'chat': {
-          const { text } = data;
-          if (typeof text !== 'string' || !ws.secret_id) return;
-          const session = sessions[ws.secret_id];
-          if (!session) return;
-
-          const payload = {
-            type: 'chat',
-            from: ws.role,
-            text: text.slice(0, 500) // обрезаем слишком длинные сообщения
-          };
-
-          // Рассылаем обоим (если подключены)
-          ['player1', 'player2'].forEach(roleKey => {
-            send(session.sockets[roleKey], payload);
-          });
-          return;
-        }
 
         default:
           send(ws, { type: 'error', message: 'Неизвестный тип' });
@@ -400,36 +288,9 @@ wss.on('connection', (ws) => {
           send(other, { type: 'pause' });
         }
       }
-    });
+    }, sessionQueues);
   });
-
-
 });
 
-const SESSION_TTL = 5 * 60 * 1000; // 5 минут
-const GC_INTERVAL = 60 * 1000;     // 1 минута
-
-// Удаление мертвых сессий
-setInterval(() => {
-  const now = Date.now();
-  for (const [secret_id, session] of Object.entries(sessions)) {
-    const hasLiveSocket = ['player1', 'player2'].some(
-      role => session.sockets[role]?.readyState === WebSocket.OPEN
-    );
-
-    if (!hasLiveSocket && (now - session.lastActive) > SESSION_TTL) {
-      log(`Удаляем сессию ${secret_id}`, 'info');
-      delete sessions[secret_id];
-    }
-  }
-}, GC_INTERVAL);
-
-// Регулярный heartbeat для всех сокетов
-const HEARTBEAT_INTERVAL = 30 * 1000;
-setInterval(() => {
-  wss.clients.forEach(ws => {
-    if (!ws.isAlive) return ws.terminate();
-    ws.isAlive = false;
-    ws.ping();
-  });
-}, HEARTBEAT_INTERVAL);
+startSessionGarbageCollector(GC_INTERVAL, SESSION_TTL, sessions, WebSocket);
+startWebSocketHeartbeat(wss, HEARTBEAT_INTERVAL);
